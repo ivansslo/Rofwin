@@ -1,0 +1,135 @@
+name: auto-build
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      signed_release:
+        description: 'Gunakan signing jika secrets tersedia'
+        required: false
+        type: boolean
+        default: true
+      artifact_suffix:
+        description: 'Suffix tambahan untuk nama artifact'
+        required: false
+        default: ''
+
+concurrency:
+  group: rofwin-auto-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ROFWIN_UPSTREAM_REPO: ${{ vars.ROFWIN_UPSTREAM_REPO || 'https://github.com/ivansslo/winlator.git' }}
+      ROFWIN_UPSTREAM_REF: ${{ vars.ROFWIN_UPSTREAM_REF || 'main' }}
+      CONTENT_BASE_URL: ${{ vars.CONTENT_BASE_URL || 'https://raw.githubusercontent.com/ivansslo/rofwin/main/' }}
+      REPO_URL: ${{ vars.REPO_URL || 'https://github.com/ivansslo/rofwin' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve metadata
+        id: meta
+        shell: bash
+        env:
+          ARTIFACT_SUFFIX_INPUT: ${{ github.event.inputs.artifact_suffix }}
+        run: |
+          VERSION_NAME=$(python3 scripts/read_android_metadata.py | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionName"])')
+          VERSION_CODE=$(python3 scripts/read_android_metadata.py | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])')
+          REF_NAME="${GITHUB_REF_NAME:-manual}"
+          SAFE_REF=$(echo "$REF_NAME" | tr '/:@ ' '----')
+          SUFFIX="${ARTIFACT_SUFFIX_INPUT:-}"
+          if [[ -n "$SUFFIX" ]]; then
+            SUFFIX="-$SUFFIX"
+          fi
+          ARTIFACT_NAME="rofwin-${SAFE_REF}-bundle${SUFFIX}"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "platforms;android-28" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
+            "ndk;24.0.8215888"
+
+      - name: Prepare signing inputs
+        id: signing
+        shell: bash
+        env:
+          REQUEST_SIGNING: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.signed_release == 'true' }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [[ "$REQUEST_SIGNING" != "true" ]]; then
+            echo "keystore_path=" >> "$GITHUB_OUTPUT"
+            echo "signed_available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
+            mkdir -p .secrets
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > .secrets/release.keystore
+            echo "keystore_path=$GITHUB_WORKSPACE/.secrets/release.keystore" >> "$GITHUB_OUTPUT"
+            echo "signed_available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "keystore_path=" >> "$GITHUB_OUTPUT"
+            echo "signed_available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Make scripts executable
+        run: chmod +x app/gradlew scripts/*.sh
+
+      - name: Build release bundle automatically
+        run: ./scripts/prepare-github-release.sh
+        env:
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.meta.outputs.version_name) }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.keystore_path }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload auto-build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish build summary
+        shell: bash
+        run: |
+          {
+            echo "## Rofwin auto build selesai"
+            echo ""
+            echo "- Version: ${{ steps.meta.outputs.version_name }}"
+            echo "- Version code: ${{ steps.meta.outputs.version_code }}"
+            echo "- Artifact bundle: ${{ steps.meta.outputs.artifact_name }}"
+            echo "- Signing available: ${{ steps.signing.outputs.signed_available }}"
+            echo "- Repo URL: https://github.com/ivansslo/rofwin"
+          } >> "$GITHUB_STEP_SUMMARY"

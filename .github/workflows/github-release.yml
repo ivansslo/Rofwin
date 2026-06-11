@@ -1,0 +1,131 @@
+name: github-release
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag release, mis. v1.0.0'
+        required: false
+        default: 'v1.0.0'
+      release_name:
+        description: 'Judul release di GitHub'
+        required: false
+        default: 'Rofwin 1.0.0'
+      draft:
+        description: 'Buat sebagai draft release'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Tandai sebagai prerelease'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      ROFWIN_UPSTREAM_REPO: ${{ vars.ROFWIN_UPSTREAM_REPO || 'https://github.com/ivansslo/winlator.git' }}
+      ROFWIN_UPSTREAM_REF: ${{ vars.ROFWIN_UPSTREAM_REF || 'main' }}
+      CONTENT_BASE_URL: ${{ vars.CONTENT_BASE_URL || 'https://raw.githubusercontent.com/ivansslo/rofwin/main/' }}
+      REPO_URL: ${{ vars.REPO_URL || 'https://github.com/ivansslo/rofwin' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        env:
+          INPUT_TAG_NAME: ${{ github.event.inputs.tag_name }}
+          INPUT_RELEASE_NAME: ${{ github.event.inputs.release_name }}
+        run: |
+          VERSION_NAME=$(python3 scripts/read_android_metadata.py | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionName"])')
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          elif [[ -n "$INPUT_TAG_NAME" ]]; then
+            RELEASE_TAG="$INPUT_TAG_NAME"
+          else
+            RELEASE_TAG="v${VERSION_NAME}"
+          fi
+
+          if [[ -n "$INPUT_RELEASE_NAME" ]]; then
+            RELEASE_NAME="$INPUT_RELEASE_NAME"
+          else
+            RELEASE_NAME="Rofwin ${VERSION_NAME}"
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "platforms;android-28" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
+            "ndk;24.0.8215888"
+
+      - name: Decode release keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          mkdir -p .secrets
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > .secrets/release.keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Make scripts executable
+        run: chmod +x app/gradlew scripts/*.sh
+
+      - name: Prepare complete GitHub release bundle
+        run: ./scripts/prepare-github-release.sh
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/.secrets/release.keystore
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: rofwin-release-bundle
+          path: artifacts/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.release_tag }}
+          name: ${{ steps.meta.outputs.release_name }}
+          target_commitish: ${{ github.sha }}
+          body_path: artifacts/RELEASE_NOTES.md
+          draft: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.draft == 'true' }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: false
+          files: artifacts/*

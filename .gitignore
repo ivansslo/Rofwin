@@ -1,0 +1,26 @@
+# Android / Gradle
+.gradle/
+local.properties
+**/build/
+**/.cxx/
+**/.externalNativeBuild/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Python / temp
+__pycache__/
+*.pyc
+.tmp/
+artifacts/
+
+# Runtime payloads fetched during build
+app/app/src/main/assets/*
+!app/app/src/main/assets/.gitkeep
+installable_components/*
+!installable_components/.gitkeep
+wine_addons/*
+!wine_addons/.gitkeep
+
