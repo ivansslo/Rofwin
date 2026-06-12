@@ -1,0 +1,86 @@
+name: dispatch-rofwin-after-release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag release Winlator yang mau diteruskan ke Rofwin, mis. v11.0'
+        required: true
+      release_name:
+        description: 'Nama release upstream'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release payload
+        id: payload
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          INPUT_TAG_NAME: ${{ github.event.inputs.tag_name }}
+          INPUT_RELEASE_NAME: ${{ github.event.inputs.release_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            UPSTREAM_TAG="$RELEASE_TAG"
+            UPSTREAM_RELEASE_NAME="$RELEASE_NAME"
+          else
+            UPSTREAM_TAG="$INPUT_TAG_NAME"
+            UPSTREAM_RELEASE_NAME="$INPUT_RELEASE_NAME"
+          fi
+
+          if [[ -z "$UPSTREAM_TAG" ]]; then
+            echo "Missing upstream tag_name" >&2
+            exit 1
+          fi
+
+          if [[ -z "$UPSTREAM_RELEASE_NAME" ]]; then
+            UPSTREAM_RELEASE_NAME="Winlator ${UPSTREAM_TAG}"
+          fi
+
+          echo "upstream_tag=$UPSTREAM_TAG" >> "$GITHUB_OUTPUT"
+          echo "upstream_release_name=$UPSTREAM_RELEASE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch build to ivansslo/rofwin
+        shell: bash
+        env:
+          ROFWIN_REPO_DISPATCH_TOKEN: ${{ secrets.ROFWIN_REPO_DISPATCH_TOKEN }}
+          ROFWIN_REPO_OWNER: ${{ vars.ROFWIN_REPO_OWNER || 'ivansslo' }}
+          ROFWIN_REPO_NAME: ${{ vars.ROFWIN_REPO_NAME || 'rofwin' }}
+          UPSTREAM_TAG: ${{ steps.payload.outputs.upstream_tag }}
+          UPSTREAM_RELEASE_NAME: ${{ steps.payload.outputs.upstream_release_name }}
+        run: |
+          if [[ -z "${ROFWIN_REPO_DISPATCH_TOKEN:-}" ]]; then
+            echo "Secret ROFWIN_REPO_DISPATCH_TOKEN is required" >&2
+            exit 1
+          fi
+
+          payload=$(python3 -c 'import json, os; print(json.dumps({"event_type": "winlator_release_published", "client_payload": {"upstream_repo": "https://github.com/ivansslo/winlator.git", "upstream_tag": os.environ["UPSTREAM_TAG"], "upstream_release_name": os.environ["UPSTREAM_RELEASE_NAME"], "source_repository": os.environ["GITHUB_REPOSITORY"], "source_run_id": os.environ["GITHUB_RUN_ID"]}}))')
+
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${ROFWIN_REPO_DISPATCH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${ROFWIN_REPO_OWNER}/${ROFWIN_REPO_NAME}/dispatches" \
+            -d "$payload"
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "## Dispatch to Rofwin berhasil"
+            echo ""
+            echo "- Upstream repo: ivansslo/winlator"
+            echo "- Upstream tag: ${{ steps.payload.outputs.upstream_tag }}"
+            echo "- Target repo: ivansslo/rofwin"
+          } >> "$GITHUB_STEP_SUMMARY"

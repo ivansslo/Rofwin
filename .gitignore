@@ -24,3 +24,11 @@ installable_components/*
 wine_addons/*
 !wine_addons/.gitkeep
 
+# Signing keys / secrets
+keys/
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.base64.txt

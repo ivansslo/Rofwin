@@ -45,6 +45,7 @@ Checklist:
 Workflow yang harus muncul di tab **Actions**:
 - [ ] `auto-build`
 - [ ] `github-release`
+- [ ] `sync-from-winlator-release` (jika memakai release chain upstream)
 
 Checklist:
 - [ ] `auto-build` sukses dan upload artifacts

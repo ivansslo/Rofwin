@@ -57,3 +57,6 @@ Workflow ini memakai script lokal:
 ./scripts/prepare-github-release.sh
 ```
 Jadi flow build lokal dan flow GitHub Actions tetap konsisten.
+
+Jika ingin build dipicu otomatis setelah release upstream Winlator, lihat:
+- [`UPSTREAM_RELEASE_CHAIN.md`](UPSTREAM_RELEASE_CHAIN.md)

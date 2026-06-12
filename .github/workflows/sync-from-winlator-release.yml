@@ -1,0 +1,158 @@
+name: sync-from-winlator-release
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+on:
+  repository_dispatch:
+    types: [winlator_release_published]
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: 'Tag upstream Winlator, mis. v11.0'
+        required: true
+      upstream_repo:
+        description: 'Repo upstream Winlator'
+        required: false
+        default: 'https://github.com/ivansslo/winlator.git'
+      release_tag:
+        description: 'Tag release di repo Rofwin. Default: <upstream_tag>-rofwin'
+        required: false
+        default: ''
+      release_name:
+        description: 'Nama release di repo Rofwin'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rofwin-sync-${{ github.event.client_payload.upstream_tag || github.event.inputs.upstream_tag || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve upstream metadata
+        id: meta
+        shell: bash
+        env:
+          DISPATCH_UPSTREAM_REPO: ${{ github.event.client_payload.upstream_repo }}
+          DISPATCH_UPSTREAM_TAG: ${{ github.event.client_payload.upstream_tag }}
+          DISPATCH_UPSTREAM_RELEASE_NAME: ${{ github.event.client_payload.upstream_release_name }}
+          INPUT_UPSTREAM_REPO: ${{ github.event.inputs.upstream_repo }}
+          INPUT_UPSTREAM_TAG: ${{ github.event.inputs.upstream_tag }}
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          INPUT_RELEASE_NAME: ${{ github.event.inputs.release_name }}
+        run: |
+          UPSTREAM_REPO="${DISPATCH_UPSTREAM_REPO:-${INPUT_UPSTREAM_REPO:-https://github.com/ivansslo/winlator.git}}"
+          UPSTREAM_TAG="${DISPATCH_UPSTREAM_TAG:-${INPUT_UPSTREAM_TAG:-}}"
+          UPSTREAM_RELEASE_NAME="${DISPATCH_UPSTREAM_RELEASE_NAME:-}"
+
+          if [[ -z "$UPSTREAM_TAG" ]]; then
+            echo "upstream_tag is required" >&2
+            exit 1
+          fi
+
+          RELEASE_TAG="${INPUT_RELEASE_TAG:-}"
+          if [[ -z "$RELEASE_TAG" ]]; then
+            RELEASE_TAG="${UPSTREAM_TAG}-rofwin"
+          fi
+
+          RELEASE_NAME="${INPUT_RELEASE_NAME:-}"
+          if [[ -z "$RELEASE_NAME" ]]; then
+            if [[ -n "$UPSTREAM_RELEASE_NAME" ]]; then
+              RELEASE_NAME="Rofwin sync from ${UPSTREAM_RELEASE_NAME}"
+            else
+              RELEASE_NAME="Rofwin sync from Winlator ${UPSTREAM_TAG}"
+            fi
+          fi
+
+          ARTIFACT_NAME="rofwin-from-${UPSTREAM_TAG//\//-}-bundle"
+
+          echo "upstream_repo=$UPSTREAM_REPO" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=$UPSTREAM_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "platforms;android-28" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
+            "ndk;24.0.8215888"
+
+      - name: Decode release keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          mkdir -p .secrets
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > .secrets/release.keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Make scripts executable
+        run: chmod +x app/gradlew scripts/*.sh
+
+      - name: Prepare release bundle from upstream Winlator tag
+        run: ./scripts/prepare-github-release.sh
+        env:
+          ROFWIN_UPSTREAM_REPO: ${{ steps.meta.outputs.upstream_repo }}
+          ROFWIN_UPSTREAM_REF: ${{ steps.meta.outputs.upstream_tag }}
+          CONTENT_BASE_URL: https://raw.githubusercontent.com/ivansslo/rofwin/main/
+          REPO_URL: https://github.com/ivansslo/rofwin
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/.secrets/release.keystore
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload sync artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish Rofwin release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.release_tag }}
+          name: ${{ steps.meta.outputs.release_name }}
+          target_commitish: ${{ github.sha }}
+          body_path: artifacts/RELEASE_NOTES.md
+          generate_release_notes: false
+          files: artifacts/*
+
+      - name: Publish build summary
+        shell: bash
+        run: |
+          {
+            echo "## Sync dari Winlator selesai"
+            echo ""
+            echo "- Upstream repo: ${{ steps.meta.outputs.upstream_repo }}"
+            echo "- Upstream tag: ${{ steps.meta.outputs.upstream_tag }}"
+            echo "- Release tag Rofwin: ${{ steps.meta.outputs.release_tag }}"
+          } >> "$GITHUB_STEP_SUMMARY"

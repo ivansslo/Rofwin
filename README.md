@@ -84,6 +84,7 @@ Jadi APK tetap artefak utama, tetapi OBB kini bisa dipakai langsung oleh app saa
 ## Dokumen release
 - Checklist upload GitHub: [`docs/GITHUB_UPLOAD_CHECKLIST.md`](docs/GITHUB_UPLOAD_CHECKLIST.md)
 - Release notes v1.0.0: [`releases/v1.0.0.md`](releases/v1.0.0.md)
+- Alur release berantai Winlator ➜ Rofwin: [`docs/UPSTREAM_RELEASE_CHAIN.md`](docs/UPSTREAM_RELEASE_CHAIN.md)
 
 ## Lisensi
 Lihat [`LICENSE`](LICENSE) dan [`NOTICE.md`](NOTICE.md). Repo ini tetap membawa atribusi upstream yang relevan.
