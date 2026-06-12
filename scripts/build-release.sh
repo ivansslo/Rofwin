@@ -13,7 +13,7 @@ fi
 
 chmod +x "$ROOT_DIR/app/gradlew"
 pushd "$ROOT_DIR/app" >/dev/null
-BUNDLE_SOURCE="$(find "$ROOT_DIR/app/app/build/outputs/bundle/release" -maxdepth 1 -type f -name '*.aab' | head -n 1)"
+BUNDLE_SOURCE="$(find "$ROOT_DIR/app/build/outputs/bundle/release" -maxdepth 1 -type f -name '*.aab' | head -n 1)"
 if [[ -z "${BUNDLE_SOURCE}" ]]; then
   echo "[rofwin] Bundle release output not found." >&2
   exit 1
