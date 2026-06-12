@@ -11,14 +11,17 @@ def releaseKeyAliasValue = (project.findProperty("ANDROID_KEY_ALIAS") ?: System.
 def releaseKeyPasswordValue = (project.findProperty("ANDROID_KEY_PASSWORD") ?: System.getenv("ANDROID_KEY_PASSWORD") ?: "").toString()
 
 android {
-    // ... existing configuration ...
-    
-    packaging {
-        resources {
-            pickFirsts += 'lib/arm64-v8a/libFLAC.so'
-        }
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.rofwin'
+        minSdkVersion 26
+        targetSdkVersion 28
+        versionCode 100
+        versionName "1.0.0"
+        buildConfigField "String", "CONTENT_BASE_URL", "\"${contentBaseUrlValue}\""
+        buildConfigField "String", "REPO_URL", "\"${repoUrlValue}\""
     }
-}
 
     signingConfigs {
         release {
