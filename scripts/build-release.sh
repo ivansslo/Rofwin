@@ -13,8 +13,14 @@ fi
 
 chmod +x "$ROOT_DIR/app/gradlew"
 pushd "$ROOT_DIR/app" >/dev/null
-./gradlew --no-daemon clean :app:assembleRelease
-popd >/dev/null
+BUNDLE_SOURCE="$(find "$ROOT_DIR/app/app/build/outputs/bundle/release" -maxdepth 1 -type f -name '*.aab' | head -n 1)"
+if [[ -z "${BUNDLE_SOURCE}" ]]; then
+  echo "[rofwin] Bundle release output not found." >&2
+  exit 1
+fi
+
+BUNDLE_TARGET="$ARTIFACT_DIR/Rofwin_${VERSION_NAME}_arm64-v8a.aab"
+cp -f "$BUNDLE_SOURCE" "$BUNDLE_TARGET"
 
 APK_SOURCE="$(find "$ROOT_DIR/app/app/build/outputs/apk/release" -maxdepth 1 -type f -name '*.apk' | head -n 1)"
 if [[ -z "${APK_SOURCE}" ]]; then
