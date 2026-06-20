@@ -11,7 +11,7 @@ def releaseKeyAliasValue = (project.findProperty("ANDROID_KEY_ALIAS") ?: System.
 def releaseKeyPasswordValue = (project.findProperty("ANDROID_KEY_PASSWORD") ?: System.getenv("ANDROID_KEY_PASSWORD") ?: "").toString()
 
 android {
-    namespace 'com.rofwin'
+    namespace 'com.winlator'
     compileSdk 34
     buildFeatures {
         buildConfig true
