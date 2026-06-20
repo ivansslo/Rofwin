@@ -104,11 +104,12 @@ jobs:
             "ndk;25.2.9519653"
 
       - name: Decode release keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         shell: bash
         run: |
-          mkdir -p .secrets
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > .secrets/release.keystore
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
+            mkdir -p .secrets
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > .secrets/release.keystore
+          fi
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
