@@ -352,28 +352,28 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         final GLRenderer renderer = xServerView.getRenderer();
-        switch (item.getItemId()) {
-            case R.id.menu_item_keyboard:
+        int _id = item.getItemId();
+        if (_id == R.id.menu_item_keyboard) {
                 AppUtils.showKeyboard(this);
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_input_controls:
+        }
+        else if (_id == R.id.menu_item_input_controls) {
                 showInputControlsDialog();
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_toggle_fullscreen:
+        }
+        else if (_id == R.id.menu_item_toggle_fullscreen) {
                 renderer.toggleFullscreen();
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_task_manager:
+        }
+        else if (_id == R.id.menu_item_task_manager) {
                 (new TaskManagerDialog(this)).show();
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_active_windows:
+        }
+        else if (_id == R.id.menu_item_active_windows) {
                 (new ActiveWindowsDialog(this)).show();
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_magnifier:
+        }
+        else if (_id == R.id.menu_item_magnifier) {
                 if (magnifierView == null) {
                     final FrameLayout container = findViewById(R.id.FLXServerDisplay);
                     magnifierView = new MagnifierView(this);
@@ -389,32 +389,33 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                     container.addView(magnifierView);
                 }
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_screen_effect:
+        }
+        else if (_id == R.id.menu_item_screen_effect) {
                 (new ScreenEffectDialog(this)).show();
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_pip_mode:
+        }
+        else if (_id == R.id.menu_item_pip_mode) {
                 PictureInPictureParams pipParams = (new PictureInPictureParams.Builder())
                     .setAspectRatio(screenInfo.aspectRatio())
                     .build();
                 enterPictureInPictureMode(pipParams);
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_logs:
+        }
+        else if (_id == R.id.menu_item_logs) {
                 debugDialog.show();
                 drawerLayout.closeDrawers();
-                break;
-            case R.id.menu_item_touchpad_help:
-                showTouchpadHelpDialog();
-                break;
-            case R.id.menu_item_exit:
-                exit();
-                break;
         }
+        else if (_id == R.id.menu_item_touchpad_help) {
+                showTouchpadHelpDialog();
+        }
+        else if (_id == R.id.menu_item_exit) {
+                exit();
+        }
+
         return true;
     }
 
+    public SharedPreferences getPreferences() {
     public SharedPreferences getPreferences() {
         return preferences;
     }

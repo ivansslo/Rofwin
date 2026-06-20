@@ -145,14 +145,14 @@ public class ContainersFragment extends Fragment {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) listItemMenu.setForceShowIcon(true);
 
             listItemMenu.setOnMenuItemClickListener((menuItem) -> {
-                switch (menuItem.getItemId()) {
-                    case R.id.menu_item_file_manager:
+                int _id = menuItem.getItemId();
+                if (_id == R.id.menu_item_file_manager) {
                         activity.showFragment(new ContainerFileManagerFragment(container.id));
-                        break;
-                    case R.id.menu_item_edit:
+                }
+                else if (_id == R.id.menu_item_edit) {
                         activity.showFragment(new ContainerDetailFragment(container.id));
-                        break;
-                    case R.id.menu_item_duplicate:
+                }
+                else if (_id == R.id.menu_item_duplicate) {
                         ContentDialog.confirm(getContext(), R.string.do_you_want_to_duplicate_this_container, () -> {
                             preloaderDialog.show(R.string.duplicating_container);
                             manager.duplicateContainerAsync(container, () -> {
@@ -160,8 +160,8 @@ public class ContainersFragment extends Fragment {
                                 loadContainersList();
                             });
                         });
-                        break;
-                    case R.id.menu_item_remove:
+                }
+                else if (_id == R.id.menu_item_remove) {
                         ContentDialog.confirm(getContext(), R.string.do_you_want_to_remove_this_container, () -> {
                             preloaderDialog.show(R.string.removing_container);
                             manager.removeContainerAsync(container, () -> {
@@ -169,13 +169,14 @@ public class ContainersFragment extends Fragment {
                                 loadContainersList();
                             });
                         });
-                        break;
-                    case R.id.menu_item_info:
-                        (new StorageInfoDialog(activity, container)).show();
-                        break;
                 }
+                else if (_id == R.id.menu_item_info) {
+                        (new StorageInfoDialog(activity, container)).show();
+                }
+
                 return true;
             });
+            listItemMenu.show();
             listItemMenu.show();
         }
 

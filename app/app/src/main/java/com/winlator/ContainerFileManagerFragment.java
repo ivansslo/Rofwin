@@ -137,24 +137,30 @@ public class ContainerFileManagerFragment extends BaseFileManagerFragment<FileIn
     @Override
     public boolean onOptionsItemSelected(MenuItem menuItem) {
         int itemId = menuItem.getItemId();
-        switch (itemId) {
-            case R.id.menu_item_home:
+        int _id = itemId;
+        if (_id == R.id.menu_item_home) {
                 folderStack.clear();
                 refreshContent();
                 return true;
-            case R.id.menu_item_view_style:
+        }
+        else if (_id == R.id.menu_item_view_style) {
                 setViewStyle(viewStyle == ViewStyle.GRID ? ViewStyle.LIST : ViewStyle.GRID);
                 preferences.edit().putString("container_file_manager_view_style", viewStyle.name()).apply();
                 refreshViewStyleMenuItem(menuItem);
                 return true;
-            case R.id.menu_item_new_folder:
+        }
+        else if (_id == R.id.menu_item_new_folder) {
                 createFolder();
                 return true;
             default:
+        }
+        else {
                 return super.onOptionsItemSelected(menuItem);
         }
+
     }
 
+    private void setCurrentWorkingPath(String dosPath) {
     private void setCurrentWorkingPath(String dosPath) {
         dosPath = StringUtils.removeEndSlash(dosPath);
         String[] names = dosPath.split("\\\\");
@@ -343,31 +349,33 @@ public class ContainerFileManagerFragment extends BaseFileManagerFragment<FileIn
 
             listItemMenu.setOnMenuItemClickListener((menuItem) -> {
                 int itemId = menuItem.getItemId();
-                switch (itemId) {
-                    case R.id.menu_item_copy:
-                    case R.id.menu_item_cut:
+                int _id = itemId;
+                if (_id == R.id.menu_item_copy) {
+                }
+                else if (_id == R.id.menu_item_cut) {
                         instantiateClipboard(file, itemId == R.id.menu_item_cut);
-                        break;
-                    case R.id.menu_item_remove:
+                }
+                else if (_id == R.id.menu_item_remove) {
                         clearClipboard();
                         ContentDialog.confirm(context, R.string.do_you_want_to_remove_this_file, () -> removeFile(file.toFile()));
-                        break;
-                    case R.id.menu_item_rename:
+                }
+                else if (_id == R.id.menu_item_rename) {
                         clearClipboard();
                         ContentDialog.prompt(context, R.string.rename, file.name, (newName) -> {
                             file.renameTo(newName);
                             refreshContent();
                         });
-                        break;
-                    case R.id.menu_item_add_favorite:
-                        addFavorite(file);
-                        break;
-                    case R.id.menu_item_info:
-                        (new FileInfoDialog(context, file, container)).show();
-                        break;
                 }
+                else if (_id == R.id.menu_item_add_favorite) {
+                        addFavorite(file);
+                }
+                else if (_id == R.id.menu_item_info) {
+                        (new FileInfoDialog(context, file, container)).show();
+                }
+
                 return true;
             });
+            listItemMenu.show();
             listItemMenu.show();
         }
 

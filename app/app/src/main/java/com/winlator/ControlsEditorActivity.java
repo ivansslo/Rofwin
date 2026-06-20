@@ -114,27 +114,28 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
 
     @Override
     public void onClick(View v) {
-        switch (v.getId()) {
-            case R.id.BTAddElement:
+        int _id = v.getId();
+        if (_id == R.id.BTAddElement) {
                 if (!inputControlsView.addElement()) {
                     AppUtils.showToast(this, R.string.no_profile_selected);
                 }
-                break;
-            case R.id.BTRemoveElement:
+        }
+        else if (_id == R.id.BTRemoveElement) {
                 if (!inputControlsView.removeElement()) {
                     AppUtils.showToast(this, R.string.no_control_element_selected);
                 }
-                break;
-            case R.id.BTElementSettings:
+        }
+        else if (_id == R.id.BTElementSettings) {
                 ControlElement selectedElement = inputControlsView.getSelectedElement();
                 if (selectedElement != null) {
                     showControlElementSettings(v);
                 }
                 else AppUtils.showToast(this, R.string.no_control_element_selected);
-                break;
         }
+
     }
 
+    private void showControlElementSettings(View anchorView) {
     private void showControlElementSettings(View anchorView) {
         final ControlElement element = inputControlsView.getSelectedElement();
         final View view = LayoutInflater.from(this).inflate(R.layout.control_element_settings, null);
