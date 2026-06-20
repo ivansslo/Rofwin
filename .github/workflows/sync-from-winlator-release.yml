@@ -104,11 +104,15 @@ jobs:
             "ndk;25.2.9519653"
 
       - name: Decode release keystore
+        id: keystore
         shell: bash
         run: |
           if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
             mkdir -p .secrets
             echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > .secrets/release.keystore
+            echo "keystore_path=${{ github.workspace }}/.secrets/release.keystore" >> "$GITHUB_OUTPUT"
+          else
+            echo "keystore_path=" >> "$GITHUB_OUTPUT"
           fi
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -124,7 +128,7 @@ jobs:
           CONTENT_BASE_URL: https://raw.githubusercontent.com/ivansslo/rofwin/main/
           REPO_URL: https://github.com/ivansslo/rofwin
           RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
-          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/.secrets/release.keystore
+          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
