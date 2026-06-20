@@ -416,7 +416,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     public SharedPreferences getPreferences() {
-    public SharedPreferences getPreferences() {
         return preferences;
     }
 

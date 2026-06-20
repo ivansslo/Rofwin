@@ -208,7 +208,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     public void showFragment(Fragment fragment) {
-    public void showFragment(Fragment fragment) {
         FragmentManager fragmentManager = getSupportFragmentManager();
         fragmentManager.beginTransaction()
             .replace(R.id.FLFragmentContainer, fragment)
