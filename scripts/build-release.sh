@@ -15,7 +15,7 @@ chmod +x "$ROOT_DIR/app/gradlew"
 pushd "$ROOT_DIR/app" >/dev/null
 
 echo "[rofwin] Running Gradle release build..."
-./gradlew :app:assembleRelease :app:bundleRelease
+./gradlew :app:assembleRelease :app:bundleRelease --refresh-dependencies
 
 popd >/dev/null
 
