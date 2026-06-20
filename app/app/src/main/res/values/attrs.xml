@@ -10,6 +10,7 @@
     <attr name="colorSecondarySurface" format="color" />
     <attr name="colorPrimarySurface" format="color" />
     <attr name="colorAccent" format="color" />
+    <attr name="colorError" format="color" />
     <attr name="toolboxBackground" format="reference" />
     <attr name="preloaderBackground" format="reference" />
     <attr name="progressBarIndeterminateImage" format="reference" />
