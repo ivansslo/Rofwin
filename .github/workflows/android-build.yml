@@ -76,7 +76,7 @@ jobs:
             "platforms;android-28" \
             "build-tools;34.0.0" \
             "cmake;3.22.1" \
-            "ndk;24.0.8215888"
+            "ndk;25.2.9519653"
 
       - name: Prepare signing inputs
         id: signing
