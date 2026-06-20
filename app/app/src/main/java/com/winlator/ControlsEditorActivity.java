@@ -136,7 +136,6 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
     }
 
     private void showControlElementSettings(View anchorView) {
-    private void showControlElementSettings(View anchorView) {
         final ControlElement element = inputControlsView.getSelectedElement();
         final View view = LayoutInflater.from(this).inflate(R.layout.control_element_settings, null);
 

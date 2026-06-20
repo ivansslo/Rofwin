@@ -177,7 +177,6 @@ public class ContainersFragment extends Fragment {
                 return true;
             });
             listItemMenu.show();
-            listItemMenu.show();
         }
 
         private void runContainer(Container container) {
