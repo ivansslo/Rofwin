@@ -13,6 +13,9 @@ def releaseKeyPasswordValue = (project.findProperty("ANDROID_KEY_PASSWORD") ?: S
 android {
     namespace 'com.rofwin'
     compileSdk 34
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
         applicationId 'com.rofwin'
