@@ -527,7 +527,6 @@ public class ContainerDetailFragment extends Fragment {
             else if (_id == R.id.menu_item_internal_storage) {
                     drive.path = AppUtils.INTERNAL_STORAGE;
                     editText.setText(AppUtils.INTERNAL_STORAGE);
-                default:
             }
             else {
                     Container container = manager.getContainerById(menuItem.getOrder());
@@ -541,7 +540,6 @@ public class ContainerDetailFragment extends Fragment {
             return true;
         });
 
-        popupMenu.show();
         popupMenu.show();
     }
 

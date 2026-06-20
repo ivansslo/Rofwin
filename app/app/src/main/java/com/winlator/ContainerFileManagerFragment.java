@@ -152,7 +152,6 @@ public class ContainerFileManagerFragment extends BaseFileManagerFragment<FileIn
         else if (_id == R.id.menu_item_new_folder) {
                 createFolder();
                 return true;
-            default:
         }
         else {
                 return super.onOptionsItemSelected(menuItem);
@@ -160,7 +159,6 @@ public class ContainerFileManagerFragment extends BaseFileManagerFragment<FileIn
 
     }
 
-    private void setCurrentWorkingPath(String dosPath) {
     private void setCurrentWorkingPath(String dosPath) {
         dosPath = StringUtils.removeEndSlash(dosPath);
         String[] names = dosPath.split("\\\\");
