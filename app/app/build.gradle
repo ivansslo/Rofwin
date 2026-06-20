@@ -1,6 +1,4 @@
-plugins {
-    id 'com.android.application' version '7.2.2'
-}
+apply plugin: 'com.android.application'
 
 def contentBaseUrlValue = (project.findProperty("contentBaseUrl") ?: System.getenv("CONTENT_BASE_URL") ?: "https://raw.githubusercontent.com/ivansslo/rofwin/main/").toString()
 if (!contentBaseUrlValue.endsWith("/")) contentBaseUrlValue += "/"
