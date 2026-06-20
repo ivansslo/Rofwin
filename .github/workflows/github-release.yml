@@ -81,21 +81,21 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install SDK packages
-  run: |
-    for attempt in {1..3}; do
-      echo "Attempt $attempt..."
-      sdkmanager --install \
-        "platform-tools" \
-        "platforms;android-34" \
-        "platforms;android-28" \
-        "build-tools;34.0.0" \
-        "cmake;3.22.1" \
-        "ndk;24.0.8215888" && break
-      if [ $attempt -lt 3 ]; then
-        echo "Installation failed, retrying..."
-        sleep 10
-      fi
-    done
+        run: |
+          for attempt in {1..3}; do
+            echo "Attempt $attempt..."
+            sdkmanager --install \
+              "platform-tools" \
+              "platforms;android-34" \
+              "platforms;android-28" \
+              "build-tools;34.0.0" \
+              "cmake;3.22.1" \
+              "ndk;24.0.8215888" && break
+            if [ $attempt -lt 3 ]; then
+              echo "Installation failed, retrying..."
+              sleep 10
+            fi
+          done
 
       - name: Decode release keystore
         if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
