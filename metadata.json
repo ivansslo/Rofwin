@@ -1,0 +1,8 @@
+{
+  "name": "Rofwin",
+  "description": "Windows Emulator Client and Container Manager optimized for Oppo Mali-G72/Low-End devices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

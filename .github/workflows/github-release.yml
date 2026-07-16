@@ -74,7 +74,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
           cache: gradle
 
       - name: Setup Android SDK
@@ -86,8 +86,10 @@ jobs:
             echo "Attempt $attempt..."
             sdkmanager --install \
               "platform-tools" \
+              "platforms;android-35" \
               "platforms;android-34" \
               "platforms;android-28" \
+              "build-tools;35.0.0" \
               "build-tools;34.0.0" \
               "cmake;3.22.1" \
               "ndk;25.2.9519653" && break
@@ -112,7 +114,7 @@ jobs:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
       - name: Make scripts executable
-        run: chmod +x app/gradlew scripts/*.sh
+        run: chmod +x gradlew scripts/*.sh
 
       - name: Prepare complete GitHub release bundle
         run: ./scripts/prepare-github-release.sh

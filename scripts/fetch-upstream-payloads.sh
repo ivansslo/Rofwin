@@ -44,11 +44,11 @@ for required_dir in "$APP_ASSETS_DIR" "$INSTALLABLE_COMPONENTS_DIR" "$WINE_ADDON
   fi
 done
 
-mkdir -p "$ROOT_DIR/app/app/src/main" "$ROOT_DIR/installable_components" "$ROOT_DIR/wine_addons"
-rm -rf "$ROOT_DIR/app/app/src/main/assets" "$ROOT_DIR/installable_components" "$ROOT_DIR/wine_addons"
-mkdir -p "$ROOT_DIR/app/app/src/main/assets" "$ROOT_DIR/installable_components" "$ROOT_DIR/wine_addons"
+mkdir -p "$ROOT_DIR/app/src/main" "$ROOT_DIR/installable_components" "$ROOT_DIR/wine_addons"
+rm -rf "$ROOT_DIR/app/src/main/assets" "$ROOT_DIR/installable_components" "$ROOT_DIR/wine_addons"
+mkdir -p "$ROOT_DIR/app/src/main/assets" "$ROOT_DIR/installable_components" "$ROOT_DIR/wine_addons"
 
-rsync -a "$APP_ASSETS_DIR/" "$ROOT_DIR/app/app/src/main/assets/"
+rsync -a "$APP_ASSETS_DIR/" "$ROOT_DIR/app/src/main/assets/"
 rsync -a "$INSTALLABLE_COMPONENTS_DIR/" "$ROOT_DIR/installable_components/"
 rsync -a "$WINE_ADDONS_DIR/" "$ROOT_DIR/wine_addons/"
 

@@ -32,13 +32,13 @@ Panduan detail: [`docs/CPH1823-Mali-G72.md`](docs/CPH1823-Mali-G72.md)
 
 ## Kenapa repo ini ringan?
 Folder payload besar tidak dibundel penuh di repo kerja ini. Saat build, script akan mengambil payload upstream:
-- `app/app/src/main/assets`
+- `app/src/main/assets`
 - `installable_components`
 - `wine_addons`
 
 Jalankan:
 ```bash
-chmod +x scripts/*.sh app/gradlew
+chmod +x scripts/*.sh gradlew
 ./scripts/prepare-github-release.sh
 ```
 

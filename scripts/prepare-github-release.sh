@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/artifacts"
 mkdir -p "$ARTIFACT_DIR"
 
-eval "$(python3 "$ROOT_DIR/scripts/read_android_metadata.py" --file "$ROOT_DIR/app/app/build.gradle" --shell)"
+eval "$(python3 "$ROOT_DIR/scripts/read_android_metadata.py" --file "$ROOT_DIR/app/build.gradle.kts" --shell)"
 
 RELEASE_TAG="${RELEASE_TAG:-v$VERSION_NAME}"
 RELEASE_NOTES_TARGET="$ARTIFACT_DIR/RELEASE_NOTES.md"

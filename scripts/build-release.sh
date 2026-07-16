@@ -5,21 +5,21 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/artifacts"
 mkdir -p "$ARTIFACT_DIR"
 
-eval "$(python3 "$ROOT_DIR/scripts/read_android_metadata.py" --file "$ROOT_DIR/app/app/build.gradle" --shell)"
+eval "$(python3 "$ROOT_DIR/scripts/read_android_metadata.py" --file "$ROOT_DIR/app/build.gradle.kts" --shell)"
 
-if [[ ! -f "$ROOT_DIR/app/app/src/main/assets/rootfs.tzst" ]]; then
+if [[ ! -f "$ROOT_DIR/app/src/main/assets/rootfs.tzst" ]]; then
   "$ROOT_DIR/scripts/fetch-upstream-payloads.sh"
 fi
 
-chmod +x "$ROOT_DIR/app/gradlew"
-pushd "$ROOT_DIR/app" >/dev/null
+chmod +x "$ROOT_DIR/gradlew"
+pushd "$ROOT_DIR" >/dev/null
 
 echo "[rofwin] Running Gradle release build..."
 ./gradlew :app:assembleRelease :app:bundleRelease --refresh-dependencies
 
 popd >/dev/null
 
-BUNDLE_SOURCE="$(find "$ROOT_DIR/app/app/build/outputs/bundle/release" -maxdepth 1 -type f -name '*.aab' | head -n 1)"
+BUNDLE_SOURCE="$(find "$ROOT_DIR/app/build/outputs/bundle/release" -maxdepth 1 -type f -name '*.aab' | head -n 1)"
 if [[ -z "${BUNDLE_SOURCE}" ]]; then
   echo "[rofwin] Bundle release output not found." >&2
   exit 1
@@ -28,7 +28,7 @@ fi
 BUNDLE_TARGET="$ARTIFACT_DIR/Rofwin_${VERSION_NAME}_arm64-v8a.aab"
 cp -f "$BUNDLE_SOURCE" "$BUNDLE_TARGET"
 
-APK_SOURCE="$(find "$ROOT_DIR/app/app/build/outputs/apk/release" -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+APK_SOURCE="$(find "$ROOT_DIR/app/build/outputs/apk/release" -maxdepth 1 -type f -name '*.apk' | head -n 1)"
 if [[ -z "${APK_SOURCE}" ]]; then
   echo "[rofwin] APK release output not found." >&2
   exit 1

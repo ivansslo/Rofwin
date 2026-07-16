@@ -4,7 +4,7 @@
 Repo **Rofwin** ini adalah turunan dari `ivansslo/winlator` yang difokuskan untuk perangkat **Oppo CPH1823 / Mali-G72**.
 
 Agar repo tetap ringan, payload besar **tidak disimpan penuh di repo ini**. Sebelum build, jalankan script fetch payload untuk mengambil:
-- `app/app/src/main/assets/`
+- `app/src/main/assets/`
 - `installable_components/`
 - `wine_addons/`
 
@@ -20,7 +20,7 @@ Agar repo tetap ringan, payload besar **tidak disimpan penuh di repo ini**. Sebe
 
 ## Build lokal
 ```bash
-chmod +x scripts/*.sh app/gradlew
+chmod +x scripts/*.sh gradlew
 ./scripts/prepare-github-release.sh
 ```
 

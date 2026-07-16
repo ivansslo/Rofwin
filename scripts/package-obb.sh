@@ -8,7 +8,7 @@ mkdir -p "$ARTIFACT_DIR" "$ROOT_DIR/.tmp"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 
-eval "$(python3 "$ROOT_DIR/scripts/read_android_metadata.py" --file "$ROOT_DIR/app/app/build.gradle" --shell)"
+eval "$(python3 "$ROOT_DIR/scripts/read_android_metadata.py" --file "$ROOT_DIR/app/build.gradle.kts" --shell)"
 
 for path in installable_components wine_addons input_controls; do
   if [[ -d "$ROOT_DIR/$path" ]]; then

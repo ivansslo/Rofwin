@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Retro Monitor/Window Box -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M24,24 h60 a4,4 0 0 1 4,4 v40 a4,4 0 0 1 -4,4 h-60 a4,4 0 0 1 -4,-4 v-40 a4,4 0 0 1 4,-4 z" />
+    <!-- Window Title Bar -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M24,24 h60 v10 h-60 z" />
+    <!-- Window buttons -->
+    <path
+        android:fillColor="#F87171"
+        android:pathData="M28,29 a1.5,1.5 0 1 0 0.001,-3.001 a1.5,1.5 0 0 0 -0.001,3.001 z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M33,29 a1.5,1.5 0 1 0 0.001,-3.001 a1.5,1.5 0 0 0 -0.001,3.001 z" />
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M38,29 a1.5,1.5 0 1 0 0.001,-3.001 a1.5,1.5 0 0 0 -0.001,3.001 z" />
+    <!-- Gamepad controller inside the window -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M44,48 h20 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-20 a4,4 0 0 1 -4,-4 v-8 a4,4 0 0 1 4,-4 z" />
+    <!-- D-pad -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M47,56 h4 v-2 h-4 v2 z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M48,55 h2 v4 h-2 v-4 z" />
+    <!-- Action buttons -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M59,54 a1,1 0 1 0 0.001,-2.001 a1,1 0 0 0 -0.001,2.001 z" />
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M61,57 a1,1 0 1 0 0.001,-2.001 a1,1 0 0 0 -0.001,2.001 z" />
+</vector>

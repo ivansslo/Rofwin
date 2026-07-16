@@ -8,7 +8,7 @@
   - [ ] `logo.png`
   - [ ] `brand/rofwin-logo.png`
   - [ ] `brand/rofwin-icon.png`
-- [ ] Pastikan versi aplikasi sudah benar di `app/app/build.gradle`
+- [ ] Pastikan versi aplikasi sudah benar di `app/build.gradle.kts`
   - [ ] `versionName = "1.0.0"`
   - [ ] `versionCode = 100`
 - [ ] Pastikan release notes ada di `releases/v1.0.0.md`
