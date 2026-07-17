@@ -1,25 +1,32 @@
 package com.winlator
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class EnvVar(val key: String, val value: String)
 
+@Serializable
 enum class DXWrapper(val displayName: String) {
     WINE_D3D("WineD3D (OpenGL based, best compatibility on low-end Mali)"),
     DXVK("DXVK (Vulkan based, heavy for Mali-G72)"),
     VKD3D("VKD3D (Vulkan based Direct3D 12)")
 }
 
+@Serializable
 enum class OpenGLDriver(val displayName: String) {
     VIRGL("VirGL (Hardware OpenGL emulation via host, best on Mali-G72)"),
     TURNIP("Turnip (Adreno only, NOT compatible with CPH1823 Mali)"),
     LLVMPIPE("LLVMpipe (CPU-based software renderer, very slow)")
 }
 
+@Serializable
 enum class Box64Preset(val displayName: String) {
     PERFORMANCE("Performance (Aggressive Dynarec, best FPS)"),
     BALANCED("Balanced (Recommended default)"),
     COMPATIBILITY("Compatibility (Strict instruction ordering, slow)")
 }
 
+@Serializable
 data class WineContainer(
     val id: String,
     val name: String,

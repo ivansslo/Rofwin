@@ -5,6 +5,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -28,12 +33,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -46,7 +56,7 @@ import kotlin.math.roundToInt
 
 // Window Type
 enum class DesktopWindow {
-    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, GAME_SIMULATION
+    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER
 }
 
 data class SimFile(val name: String, val isDirectory: Boolean = false, val size: String = "1 KB")
@@ -67,6 +77,7 @@ fun WineDesktopSim(
 
     // Window offsets (simple dragging support)
     var windowOffset by remember { mutableStateOf(Offset(50f, 100f)) }
+    var minimizedWindows = remember { mutableStateListOf<DesktopWindow>() }
 
     // File Explorer State
     var currentPath by remember { mutableStateOf("C:\\") }
@@ -110,17 +121,19 @@ fun WineDesktopSim(
                         SimFile("Desktop", true)
                     ),
                     "D:\\" to listOf(
-                        SimFile("Games", true),
+                        SimFile("Work", true),
                         SimFile("Downloads", true)
                     ),
-                    "D:\\Games" to listOf(
-                        SimFile("GTA 5 (Simulated)", false, "65 GB"),
-                        SimFile("Skyrim (Simulated)", false, "12 GB"),
-                        SimFile("Fallout 3 (Simulated)", false, "8 GB"),
-                        SimFile("FlatOut 2 (Simulated)", false, "4 GB")
+                    "D:\\Work" to listOf(
+                        SimFile("script.py", false, "2 KB"),
+                        SimFile("backup.rar", false, "15 MB"),
+                        SimFile("notes.txt", false, "1 KB")
                     ),
                     "D:\\Downloads" to listOf(
-                        SimFile("winetricks.exe", false, "3 MB")
+                        SimFile("winetricks.exe", false, "3 MB"),
+                        SimFile("python-3.12.exe", false, "25 MB"),
+                        SimFile("lasokamodule.exe", false, "1.2 MB"),
+                        SimFile("winrar_full.exe", false, "4.5 MB")
                     )
                 )
             )
@@ -166,12 +179,6 @@ fun WineDesktopSim(
     }
     var terminalInput by remember { mutableStateOf("") }
 
-    // Game Simulation State
-    var selectedGameName by remember { mutableStateOf("") }
-    var simulatedFps by remember { mutableIntStateOf(0) }
-    var gameTimeMs by remember { mutableLongStateOf(0L) }
-    var buttonPressedLog by remember { mutableStateOf("Press virtual gamepad buttons") }
-
     // Booting sequence
     LaunchedEffect(Unit) {
         while (bootProgress < 1f) {
@@ -182,28 +189,8 @@ fun WineDesktopSim(
     }
 
     // simulated real-time stats (FPS, Temps)
-    LaunchedEffect(openWindow, selectedGameName) {
-        if (openWindow == DesktopWindow.GAME_SIMULATION) {
-            val baseFps = when (container.resolution) {
-                "640x480" -> 60
-                "800x600" -> 50
-                "1024x768" -> 35
-                "1280x720" -> 28
-                else -> 18
-            }
-            // Performance preset yields more FPS
-            val multiplier = when (container.box64Preset) {
-                Box64Preset.PERFORMANCE -> 1.2f
-                Box64Preset.BALANCED -> 1.0f
-                Box64Preset.COMPATIBILITY -> 0.7f
-            }
-
-            while (openWindow == DesktopWindow.GAME_SIMULATION) {
-                delay(800)
-                simulatedFps = ((baseFps + (-3..3).random()) * multiplier).roundToInt().coerceAtLeast(5)
-                gameTimeMs += 800
-            }
-        }
+    LaunchedEffect(openWindow) {
+        // Stats logic removed (games only)
     }
 
     if (isBooting) {
@@ -264,6 +251,21 @@ fun WineDesktopSim(
                     )
                 )
         ) {
+            Image(
+                painter = painterResource(id = R.drawable.rofwin_background_1784258475774),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+
+            // Auto-save logic (prevent data loss during closures)
+            LaunchedEffect(Unit) {
+                while(true) {
+                    delay(60000)
+                    // Simulated serialization to storage every 60s
+                    android.util.Log.d("Rofwin", "Auto-saving container ${container.name} state to storage...")
+                }
+            }
             // Desktop Icon Grid
             Column(
                 modifier = Modifier
@@ -278,62 +280,88 @@ fun WineDesktopSim(
                     onClick = { openWindow = DesktopWindow.MY_COMPUTER }
                 )
                 DesktopIconButton(
-                    name = "Registry Editor",
-                    icon = Icons.Default.Settings,
-                    onClick = { openWindow = DesktopWindow.REGISTRY_EDITOR }
+                    name = "Web Browser",
+                    icon = Icons.Default.Language,
+                    onClick = { openWindow = DesktopWindow.BROWSER }
+                )
+                DesktopIconButton(
+                    name = "Git Bash",
+                    icon = Icons.Default.Terminal,
+                    onClick = { openWindow = DesktopWindow.GIT_BASH }
+                )
+                DesktopIconButton(
+                    name = "AI ROC Route",
+                    icon = Icons.Default.Route,
+                    onClick = { openWindow = DesktopWindow.AI_ROUTE }
+                )
+                DesktopIconButton(
+                    name = "WinRAR",
+                    icon = Icons.Default.FolderZip,
+                    onClick = { openWindow = DesktopWindow.WINRAR }
+                )
+                DesktopIconButton(
+                    name = "Python 3",
+                    icon = Icons.Default.Code,
+                    onClick = { openWindow = DesktopWindow.PYTHON_SHELL }
+                )
+                DesktopIconButton(
+                    name = "SSH Connect",
+                    icon = Icons.Default.CloudSync,
+                    onClick = { openWindow = DesktopWindow.SSH_MANAGER }
                 )
                 DesktopIconButton(
                     name = "Task Manager",
                     icon = Icons.Default.AlignVerticalBottom,
                     onClick = { openWindow = DesktopWindow.TASK_MANAGER }
                 )
-                DesktopIconButton(
-                    name = "Command Prompt",
-                    icon = Icons.Default.Terminal,
-                    onClick = { openWindow = DesktopWindow.COMMAND_PROMPT }
-                )
-                DesktopIconButton(
-                    name = "DirectX Diag (dxdiag)",
-                    icon = Icons.Default.Info,
-                    onClick = { openWindow = DesktopWindow.DX_DIAG }
-                )
             }
 
-            // Quick Launcher Panel for Games in Container (D:\Games)
-            Column(
+            // Quick Launcher Grid for Professional Tools (Optimized for Mali-G72)
+            Card(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(16.dp)
-                    .background(Color(0x33000000), RoundedCornerShape(12.dp))
-                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
-                    .padding(12.dp)
-                    .width(140.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .width(180.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f)),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
             ) {
-                Text(
-                    text = "D:\\Games Shortcut",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                listOf("GTA 5", "Skyrim", "Fallout 3", "FlatOut 2").forEach { game ->
-                    Button(
-                        onClick = {
-                            selectedGameName = game
-                            openWindow = DesktopWindow.GAME_SIMULATION
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimarySky.copy(alpha = 0.2f)),
-                        shape = RoundedCornerShape(4.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "QUICK LAUNCH",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = SecondaryTeal,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        ),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.heightIn(max = 200.dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(game, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val quickTools = listOf(
+                            Triple("PS1", Icons.Default.Terminal, DesktopWindow.COMMAND_PROMPT),
+                            Triple("EXE", Icons.Default.PlayCircle, DesktopWindow.COMMAND_PROMPT),
+                            Triple("Web", Icons.Default.Language, DesktopWindow.BROWSER),
+                            Triple("Folder", Icons.Default.Folder, DesktopWindow.MY_COMPUTER)
+                        )
+                        items(quickTools) { (name, icon, win) ->
+                            Column(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .clickable { openWindow = win }
+                                    .padding(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(name, color = Color.White, fontSize = 9.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -373,18 +401,29 @@ fun WineDesktopSim(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = getWindowTitle(openWindow, selectedGameName),
+                                    text = getWindowTitle(openWindow),
                                     style = MaterialTheme.typography.titleSmall.copy(
                                         color = Color.Black,
                                         fontWeight = FontWeight.Bold
                                     )
                                 )
                             }
-                            IconButton(
-                                onClick = { openWindow = DesktopWindow.NONE },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Black)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = {
+                                        minimizedWindows.add(openWindow)
+                                        openWindow = DesktopWindow.NONE
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Minimize, contentDescription = "Minimize", tint = Color.Black)
+                                }
+                                IconButton(
+                                    onClick = { openWindow = DesktopWindow.NONE },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Black)
+                                }
                             }
                         }
 
@@ -629,7 +668,7 @@ fun WineDesktopSim(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text("Wine Task Manager", style = MaterialTheme.typography.titleSmall.copy(color = PrimarySky))
-                                            Text("Mali-G72 GPU: ${if (selectedGameName.isNotEmpty()) "88%" else "12%"}", style = MaterialTheme.typography.labelSmall.copy(color = SecondaryTeal))
+                                            Text("Mali-G72 GPU: ${"12%"}", style = MaterialTheme.typography.labelSmall.copy(color = SecondaryTeal))
                                         }
 
                                         LazyColumn(modifier = Modifier.weight(1f).border(1.dp, Color.Gray)) {
@@ -662,100 +701,25 @@ fun WineDesktopSim(
                                 }
                                 DesktopWindow.COMMAND_PROMPT -> {
                                     // Interactive Terminal Prompt
-                                    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                                        LazyColumn(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .fillMaxWidth()
-                                                .background(Color.Black)
-                                                .padding(6.dp)
-                                        ) {
-                                            items(commandLogs) { log ->
-                                                Text(
-                                                    text = log,
-                                                    style = MaterialTheme.typography.labelSmall.copy(
-                                                        color = Color.Green,
-                                                        fontFamily = FontFamily.Monospace
-                                                    )
-                                                )
-                                            }
-                                        }
-
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(Color.Black)
-                                                .padding(4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text("C:\\Windows\\System32>", color = Color.Green, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            TextField(
-                                                value = terminalInput,
-                                                onValueChange = { terminalInput = it },
-                                                singleLine = true,
-                                                colors = TextFieldDefaults.colors(
-                                                    focusedContainerColor = Color.Black,
-                                                    unfocusedContainerColor = Color.Black,
-                                                    focusedTextColor = Color.Green,
-                                                    unfocusedTextColor = Color.Green
-                                                ),
-                                                textStyle = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            IconButton(
-                                                onClick = {
-                                                    if (terminalInput.isNotBlank()) {
-                                                        val cmd = terminalInput.trim().lowercase()
-                                                        commandLogs.add("C:\\Windows\\System32>$terminalInput")
-                                                        when {
-                                                            cmd == "help" -> {
-                                                                commandLogs.add("Available commands:")
-                                                                commandLogs.add("  help      - Show this help menu")
-                                                                commandLogs.add("  dir       - List directory contents")
-                                                                commandLogs.add("  wine --version - Query active Wine engine")
-                                                                commandLogs.add("  winetricks     - Configure Windows DLLs")
-                                                                commandLogs.add("  systeminfo     - Display specs for Mali-G72")
-                                                                commandLogs.add("  clear     - Clear logs")
-                                                            }
-                                                            cmd == "dir" -> {
-                                                                commandLogs.add(" Directory of C:\\Windows\\System32:")
-                                                                commandLogs.add("07/16/2026  10:24 AM    <DIR>          .")
-                                                                commandLogs.add("07/16/2026  10:24 AM    <DIR>          ..")
-                                                                commandLogs.add("07/16/2026  10:24 AM           820,112 kernel32.dll")
-                                                                commandLogs.add("07/16/2026  10:24 AM           640,992 user32.dll")
-                                                                commandLogs.add("07/16/2026  10:24 AM           310,240 gdi32.dll")
-                                                            }
-                                                            cmd == "wine --version" -> {
-                                                                commandLogs.add("wine-8.0.2 (Rofwin Dynamic Build x86_64)")
-                                                            }
-                                                            cmd == "winetricks" -> {
-                                                                commandLogs.add("Winetricks loader:")
-                                                                commandLogs.add("Installing corefonts, d3dx9, d3dcompiler_47... SUCCESS.")
-                                                            }
-                                                            cmd == "systeminfo" -> {
-                                                                commandLogs.add("Host Device : Oppo CPH1823 (Oppo F9)")
-                                                                commandLogs.add("Processor   : MediaTek Helio P60 (MT6771)")
-                                                                commandLogs.add("GPU         : ARM Mali-G72 MP3")
-                                                                commandLogs.add("Sys Memory  : 4 GB LPDDR4X")
-                                                                commandLogs.add("Active Pres : ${container.box64Preset} mode")
-                                                            }
-                                                            cmd == "clear" -> {
-                                                                commandLogs.clear()
-                                                            }
-                                                            else -> {
-                                                                commandLogs.add("'$terminalInput' is not recognized as an internal command.")
-                                                            }
-                                                        }
-                                                        commandLogs.add("")
-                                                        terminalInput = ""
-                                                    }
-                                                }
-                                            ) {
-                                                Icon(Icons.Default.PlayArrow, contentDescription = "Execute Command", tint = Color.Green)
-                                            }
-                                        }
-                                    }
+                                    TerminalWindow(container, commandLogs, terminalInput, onInputChange = { terminalInput = it })
+                                }
+                                DesktopWindow.WINRAR -> {
+                                    WinRarWindow()
+                                }
+                                DesktopWindow.PYTHON_SHELL -> {
+                                    PythonShellWindow()
+                                }
+                                DesktopWindow.SSH_MANAGER -> {
+                                    SshManagerWindow()
+                                }
+                                DesktopWindow.BROWSER -> {
+                                    BrowserWindow()
+                                }
+                                DesktopWindow.GIT_BASH -> {
+                                    GitBashWindow()
+                                }
+                                DesktopWindow.AI_ROUTE -> {
+                                    AiRouteWindow()
                                 }
                                 DesktopWindow.DX_DIAG -> {
                                     // dxdiag details
@@ -778,81 +742,6 @@ fun WineDesktopSim(
                                             item { DxDiagRow("Direct3D Renderer", "OpenGL VirGL Emulator (via Mali-G72)") }
                                             item { DxDiagRow("Vulkan status", "None (Deactivated to prevent Mali shader crash)") }
                                             item { DxDiagRow("Recommended Res", "800x600 for performance (Helio P60)") }
-                                        }
-                                    }
-                                }
-                                DesktopWindow.GAME_SIMULATION -> {
-                                    // Game emulator overlay experience
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .weight(0.4f)
-                                                .background(Color.Black),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            // game rendering canvas
-                                            GameSimulationScreen(selectedGameName, simulatedFps, gameTimeMs)
-                                        }
-
-                                        // Virtual Gamepad Control Simulator
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .weight(0.6f)
-                                                .background(DarkBackground)
-                                                .padding(6.dp)
-                                        ) {
-                                            Column {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        "Active Layout: ${profile.name}",
-                                                        fontSize = 11.sp,
-                                                        color = Color.LightGray,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                    Text(
-                                                        text = buttonPressedLog,
-                                                        style = MaterialTheme.typography.labelSmall.copy(color = SecondaryTeal)
-                                                    )
-                                                }
-
-                                                // Display the virtual controls configured in the selected profile!
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
-                                                        .background(Color(0x1AFFFFFF))
-                                                ) {
-                                                    profile.controls.forEach { control ->
-                                                        Button(
-                                                            onClick = {
-                                                                buttonPressedLog = "Pressed ${control.name} [Map: ${control.keyMapping}]"
-                                                            },
-                                                            colors = ButtonDefaults.buttonColors(containerColor = PrimarySky.copy(alpha = 0.5f)),
-                                                            modifier = Modifier
-                                                                .size(control.sizeDp.dp)
-                                                                .offset(
-                                                                    x = (control.relativeX * 3.2f).dp,
-                                                                    y = (control.relativeY * 1.5f).dp
-                                                                ),
-                                                            shape = CircleShape,
-                                                            contentPadding = PaddingValues(1.dp)
-                                                        ) {
-                                                            Text(
-                                                                control.name.take(4),
-                                                                fontSize = 9.sp,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = Color.White
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
                                         }
                                     }
                                 }
@@ -900,16 +789,33 @@ fun WineDesktopSim(
                 }
 
                 // Center active taskbar icon
-                if (openWindow != DesktopWindow.NONE) {
-                    Row(
-                        modifier = Modifier
-                            .background(DarkSurfaceVariant, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(getWindowIcon(openWindow), contentDescription = null, tint = PrimarySky, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(openWindow.name.replace("_", " "), color = Color.White, fontSize = 11.sp)
+                Row(
+                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val activeWindows = listOfNotNull(openWindow.takeIf { it != DesktopWindow.NONE }) + minimizedWindows
+                    activeWindows.distinct().forEach { win ->
+                        Box(
+                            modifier = Modifier
+                                .background(if (win == openWindow) PrimarySky.copy(alpha = 0.2f) else Color(0x1AFFFFFF), RoundedCornerShape(4.dp))
+                                .border(1.dp, if (win == openWindow) PrimarySky else Color.Gray, RoundedCornerShape(4.dp))
+                                .clickable {
+                                    if (win == openWindow) {
+                                        minimizedWindows.add(win)
+                                        openWindow = DesktopWindow.NONE
+                                    } else {
+                                        minimizedWindows.remove(win)
+                                        openWindow = win
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(getWindowIcon(win), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(getWindowTitle(win).take(15), color = Color.White, fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
 
@@ -918,6 +824,43 @@ fun WineDesktopSim(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 ) {
+                    // Volume Control (New)
+                    var showVolume by remember { mutableStateOf(false) }
+                    var volumeLevel by remember { mutableFloatStateOf(0.7f) }
+                    
+                    Box {
+                        Icon(
+                            imageVector = if (volumeLevel > 0) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                            contentDescription = "Volume",
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(20.dp).clickable { showVolume = !showVolume }
+                        )
+                        
+                        if (showVolume) {
+                            Card(
+                                modifier = Modifier.align(Alignment.BottomEnd).offset(y = (-50).dp).width(40.dp).height(150.dp),
+                                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Slider(
+                                        value = volumeLevel,
+                                        onValueChange = { volumeLevel = it },
+                                        modifier = Modifier.weight(1f).graphicsLayer {
+                                            rotationZ = -90f
+                                        }
+                                    )
+                                    Text("${(volumeLevel * 100).toInt()}%", fontSize = 9.sp, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -1064,99 +1007,6 @@ fun DxDiagRow(label: String, value: String) {
     }
 }
 
-@Composable
-fun GameSimulationScreen(gameName: String, fps: Int, timeMs: Long) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        // Simple graphics demo simulating gameplay
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val width = size.width
-            val height = size.height
-
-            // Render a simulated space grid scrolling
-            val offset = (timeMs * 0.05f) % height
-            for (i in 0..10) {
-                drawLine(
-                    color = Color(0x330EA5E9),
-                    start = Offset(0f, offset + i * 40f),
-                    end = Offset(width, offset + i * 40f),
-                    strokeWidth = 2f
-                )
-            }
-
-            // Render simulated player cube/ship
-            drawCircle(
-                color = Color(0xFFEF4444),
-                center = Offset(width / 2f + (timeMs * 0.1f % 200 - 100), height - 60f),
-                radius = 16f
-            )
-
-            // Render falling game objects (enemies / barriers)
-            drawRect(
-                color = Color(0xFF10B981),
-                topLeft = Offset(width / 3f, (timeMs * 0.15f) % height),
-                size = androidx.compose.ui.geometry.Size(30f, 30f)
-            )
-
-            drawRect(
-                color = Color(0xFFF59E0B),
-                topLeft = Offset(width * 2/3f, ((timeMs + 500) * 0.12f) % height),
-                size = androidx.compose.ui.geometry.Size(24f, 24f)
-            )
-        }
-
-        // Overlay game name, FPS counter and tuning telemetry
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Wine Engine: $gameName.exe [x86_64]",
-                    color = Color.Yellow,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "FPS: $fps",
-                    color = if (fps >= 40) Color.Green else if (fps >= 24) Color.Yellow else Color.Red,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Mesa GL Driver: VirGL 3.1",
-                    color = Color.Cyan,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "Oppo CPH1823 Temp: 42°C",
-                    color = Color.LightGray,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-    }
-}
-
 fun getWindowIcon(window: DesktopWindow): ImageVector {
     return when (window) {
         DesktopWindow.MY_COMPUTER -> Icons.Default.Computer
@@ -1164,19 +1014,304 @@ fun getWindowIcon(window: DesktopWindow): ImageVector {
         DesktopWindow.TASK_MANAGER -> Icons.Default.AlignVerticalBottom
         DesktopWindow.COMMAND_PROMPT -> Icons.Default.Terminal
         DesktopWindow.DX_DIAG -> Icons.Default.Info
-        DesktopWindow.GAME_SIMULATION -> Icons.Default.Gamepad
+        DesktopWindow.BROWSER -> Icons.Default.Language
+        DesktopWindow.GIT_BASH -> Icons.Default.Terminal
+        DesktopWindow.AI_ROUTE -> Icons.Default.Route
+        DesktopWindow.WINRAR -> Icons.Default.FolderZip
+        DesktopWindow.PYTHON_SHELL -> Icons.Default.Code
+        DesktopWindow.SSH_MANAGER -> Icons.Default.CloudSync
         else -> Icons.Default.Laptop
     }
 }
 
-fun getWindowTitle(window: DesktopWindow, gameName: String): String {
+fun getWindowTitle(window: DesktopWindow): String {
     return when (window) {
         DesktopWindow.MY_COMPUTER -> "My Computer"
         DesktopWindow.REGISTRY_EDITOR -> "Registry Editor (regedit.exe)"
         DesktopWindow.TASK_MANAGER -> "Wine Task Manager"
         DesktopWindow.COMMAND_PROMPT -> "Command Prompt"
         DesktopWindow.DX_DIAG -> "DirectX Diagnostic Tool (dxdiag)"
-        DesktopWindow.GAME_SIMULATION -> "Wine Render Engine - Running $gameName"
+        DesktopWindow.BROWSER -> "Chromium Web Peramban"
+        DesktopWindow.GIT_BASH -> "Git Bash Terminal"
+        DesktopWindow.AI_ROUTE -> "AI ROC-AgentsRoute v1.0"
+        DesktopWindow.WINRAR -> "WinRAR (Unregistered Evaluation Copy)"
+        DesktopWindow.PYTHON_SHELL -> "Python 3.12.1 Shell"
+        DesktopWindow.SSH_MANAGER -> "SSH Connection Manager"
         else -> "Wine Window"
+    }
+}
+
+@Composable
+fun TerminalWindow(
+    container: WineContainer,
+    commandLogs: MutableList<String>,
+    terminalInput: String,
+    onInputChange: (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(Color.Black)
+                .padding(6.dp)
+        ) {
+            items(commandLogs) { log ->
+                Text(
+                    text = log,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = Color.Green,
+                        fontFamily = FontFamily.Monospace
+                    )
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Black)
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("C:\\Windows\\System32>", color = Color.Green, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            Spacer(modifier = Modifier.width(4.dp))
+            TextField(
+                value = terminalInput,
+                onValueChange = onInputChange,
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Black,
+                    unfocusedContainerColor = Color.Black,
+                    focusedTextColor = Color.Green,
+                    unfocusedTextColor = Color.Green
+                ),
+                textStyle = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = {
+                    if (terminalInput.isNotBlank()) {
+                        val cmd = terminalInput.trim().lowercase()
+                        commandLogs.add("C:\\Windows\\System32>$terminalInput")
+                        when {
+                            cmd == "help" -> {
+                                commandLogs.add("Available commands:")
+                                commandLogs.add("  help      - Show this help menu")
+                                commandLogs.add("  dir       - List directory contents")
+                                commandLogs.add("  wine --version - Query active Wine engine")
+                                commandLogs.add("  winetricks     - Configure Windows DLLs")
+                                commandLogs.add("  systeminfo     - Display specs for Mali-G72")
+                                commandLogs.add("  clear     - Clear logs")
+                                commandLogs.add("  ps1 script.ps1 - Run PowerShell script")
+                            }
+                            cmd == "dir" -> {
+                                commandLogs.add(" Directory of C:\\Windows\\System32:")
+                                commandLogs.add("07/16/2026  10:24 AM    <DIR>          .")
+                                commandLogs.add("07/16/2026  10:24 AM    <DIR>          ..")
+                                commandLogs.add("07/16/2026  10:24 AM           820,112 kernel32.dll")
+                                commandLogs.add("07/16/2026  10:24 AM           640,992 user32.dll")
+                                commandLogs.add("07/16/2026  10:24 AM           310,240 gdi32.dll")
+                            }
+                            cmd.startsWith("ps1") -> {
+                                commandLogs.add("Execution Policy: Bypass...")
+                                commandLogs.add("Loading script module... SUCCESS.")
+                                commandLogs.add("Output: Rofwin PowerShell simulation active.")
+                            }
+                            cmd == "wine --version" -> {
+                                commandLogs.add("wine-8.0.2 (Rofwin Dynamic Build x86_64)")
+                            }
+                            cmd == "winetricks" -> {
+                                commandLogs.add("Winetricks loader:")
+                                commandLogs.add("Installing corefonts, d3dx9, d3dcompiler_47... SUCCESS.")
+                            }
+                            cmd == "systeminfo" -> {
+                                commandLogs.add("Host Device : Oppo CPH1823 (Oppo F9)")
+                                commandLogs.add("Processor   : MediaTek Helio P60 (MT6771)")
+                                commandLogs.add("GPU         : ARM Mali-G72 MP3")
+                                commandLogs.add("Sys Memory  : 4 GB LPDDR4X")
+                                commandLogs.add("Active Pres : ${container.box64Preset} mode")
+                            }
+                            cmd == "clear" -> {
+                                commandLogs.clear()
+                            }
+                            else -> {
+                                commandLogs.add("'$terminalInput' is not recognized as an internal command.")
+                            }
+                        }
+                        commandLogs.add("")
+                        onInputChange("")
+                    }
+                }
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Execute Command", tint = Color.Green)
+            }
+        }
+    }
+}
+
+@Composable
+fun WinRarWindow() {
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().background(Color.Gray.copy(alpha = 0.2f)).padding(4.dp)) {
+            listOf("File", "Commands", "Tools", "Favorites", "Options", "Help").forEach {
+                Text(it, fontSize = 11.sp, color = Color.White, modifier = Modifier.padding(horizontal = 6.dp))
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = PrimarySky)
+            Icon(Icons.Default.Upload, contentDescription = null, tint = SecondaryTeal)
+            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Green)
+            Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
+            Icon(Icons.Default.FindInPage, contentDescription = null, tint = Color.Yellow)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Box(modifier = Modifier.fillMaxSize().border(1.dp, Color.Gray).background(DarkSurface).padding(8.dp)) {
+            Column {
+                Text("Archive: backup.rar", color = Color.White, fontWeight = FontWeight.Bold)
+                Divider(modifier = Modifier.padding(vertical = 4.dp))
+                listOf("database_dump.sql", "config.json", "logs/", "src_backup/").forEach {
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (it.endsWith("/")) Icons.Default.Folder else Icons.Default.Description, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(it, color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PythonShellWindow() {
+    val logs = remember { mutableStateListOf("Python 3.12.1 (tags/v3.12.1:2305ca5, Dec  7 2023, 22:03:25) [MSC v.1937 64 bit (AMD64)] on win32", "Type \"help\", \"copyright\", \"credits\" or \"license\" for more information.", ">>> ") }
+    var input by remember { mutableStateOf("") }
+    
+    Column(modifier = Modifier.fillMaxSize().background(Color.Black).padding(8.dp)) {
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(logs) { Text(it, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(">>> ", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            BasicTextField(
+                value = input,
+                onValueChange = { input = it },
+                textStyle = TextStyle(color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                modifier = Modifier.fillMaxWidth(),
+                cursorBrush = SolidColor(Color.White),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = {
+                    if (input.isNotBlank()) {
+                        logs.add(">>> $input")
+                        when (input.trim()) {
+                            "print('hello')" -> logs.add("hello")
+                            "2 + 2" -> logs.add("4")
+                            "import os; os.listdir()" -> logs.add("['Windows', 'Program Files', 'users']")
+                            else -> logs.add("NameError: name '$input' is not defined")
+                        }
+                        input = ""
+                    }
+                })
+            )
+        }
+    }
+}
+
+@Composable
+fun SshManagerWindow() {
+    var host by remember { mutableStateOf("192.168.1.105") }
+    var user by remember { mutableStateOf("admin") }
+    var connected by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        if (!connected) {
+            Text("SSH Connection Setup", color = PrimarySky, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("Host IP") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = { connected = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Connect Automatically")
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CloudDone, contentDescription = null, tint = Color.Green)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Connected to $host as $user", color = Color.White)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black).padding(8.dp)) {
+                Text("admin@$host:~$ ls -la\ntotal 4k\ndrwxr-xr-x 2 admin admin 4096 Jul 16 20:15 .\ndrwxr-xr-x 3 root  root  4096 Jul 16 20:15 ..\n-rw-r--r-- 1 admin admin    0 Jul 16 20:15 .bash_history", color = Color.Green, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            }
+        }
+    }
+}
+@Composable
+fun BrowserWindow() {
+    var url by remember { mutableStateOf("https://www.google.com") }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().background(DarkSurface).padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Language, contentDescription = null, tint = Color.White)
+            Spacer(modifier = Modifier.width(8.dp))
+            TextField(
+                value = url,
+                onValueChange = { url = it },
+                modifier = Modifier.weight(1f).height(40.dp),
+                colors = TextFieldDefaults.colors(focusedContainerColor = DarkSurfaceVariant),
+                textStyle = TextStyle(fontSize = 11.sp, color = Color.White)
+            )
+            IconButton(onClick = { /* Refresh sim */ }) {
+                Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White)
+            }
+        }
+        Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.BrowserUpdated, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(64.dp))
+                Text("Simulated Chromium Engine", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text("Viewing $url", color = Color.Gray, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun GitBashWindow() {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)).padding(12.dp)) {
+        Text("ivansslo@CPH1823 MINGW64 /", color = Color(0xFFADFF2F), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text("$ git fetch origin", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text("From github.com:ivansslo/rofwin-agents", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text(" * [new branch]      main       -> origin/main", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text("$ git branch", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text("* main", color = Color(0xFFADFF2F), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text("$ _", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+    }
+}
+
+@Composable
+fun AiRouteWindow() {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("AI ROC-AgentsRoute v1.0", style = MaterialTheme.typography.titleMedium.copy(color = SecondaryTeal))
+        Text("Powered by Gemini Agentic Engine", fontSize = 11.sp, color = TextSecondary)
+        Spacer(modifier = Modifier.height(16.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = DarkSurface)) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("Current Route Status:", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                Text("Route A-102 (Optimized for MediaTek P60)", color = PrimarySky, fontSize = 11.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Latency Reduction: 24ms", color = Color.Green, fontSize = 11.sp)
+                Text("Packet Steering: Active", color = Color.Green, fontSize = 11.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { /* Recalculate */ }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Recalculate AI Path")
+        }
     }
 }

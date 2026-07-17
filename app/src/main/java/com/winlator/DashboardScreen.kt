@@ -25,14 +25,26 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import android.util.Log
 
 enum class DashboardSection {
-    CONTAINERS, PRESETS, INPUT_CONTROLS, OPPO_TUNING_GUIDE, BUILD_APK
+    QUICK_LAUNCH, CONTAINERS, PRESETS, INPUT_CONTROLS, OPPO_TUNING_GUIDE, ADDITIONAL_MODULES, MARKETPLACE, EXPLORER, SETTINGS, BUILD_APK
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,23 +53,77 @@ fun DashboardScreen(
     onLaunchContainer: (WineContainer, InputControlsProfile) -> Unit
 ) {
     var activeSection by remember { mutableStateOf(DashboardSection.CONTAINERS) }
+    val context = LocalContext.current
+    val json = remember { Json { ignoreUnknownKeys = true; prettyPrint = true } }
+    val storageFile = remember { File(context.filesDir, "containers_v2.json") }
+    val scope = rememberCoroutineScope()
 
     // Mock Databases (In-Memory states)
     val containers = remember { mutableStateListOf<WineContainer>().apply { addAll(ContainerDefaults.PRELOADED_CONTAINERS) } }
     val profiles = remember { mutableStateListOf<InputControlsProfile>().apply { addAll(InputProfileDefaults.PRELOADED_PROFILES) } }
 
+    // Initial load from storage
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            if (storageFile.exists()) {
+                try {
+                    val content = storageFile.readText()
+                    val savedContainers = json.decodeFromString<List<WineContainer>>(content)
+                    if (savedContainers.isNotEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            containers.clear()
+                            containers.addAll(savedContainers)
+                        }
+                    }
+                    Log.d("AutoSave", "Loaded ${savedContainers.size} containers from storage")
+                } catch (e: Exception) {
+                    Log.e("AutoSave", "Failed to load stored containers", e)
+                }
+            }
+        }
+    }
+
+    // Background Auto-Save Loop (60s)
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60000)
+            val stateToSave = containers.toList()
+            withContext(Dispatchers.IO) {
+                try {
+                    val jsonString = json.encodeToString(stateToSave)
+                    storageFile.writeText(jsonString)
+                    Log.d("AutoSave", "Auto-save triggered: ${stateToSave.size} containers saved.")
+                } catch (e: Exception) {
+                    Log.e("AutoSave", "Auto-save operation failed", e)
+                }
+            }
+        }
+    }
+
+    fun manualSave() {
+        val currentList = containers.toList()
+        scope.launch(Dispatchers.IO) {
+            try {
+                val jsonString = json.encodeToString(currentList)
+                storageFile.writeText(jsonString)
+                Log.d("AutoSave", "Manual save: ${currentList.size} containers.")
+            } catch (e: Exception) {
+                Log.e("AutoSave", "Manual save failed", e)
+            }
+        }
+    }
+
     var containerToEdit by remember { mutableStateOf<WineContainer?>(null) }
     var showFormDialog by remember { mutableStateOf(false) }
 
     // Dynamic color tuning status
-    val isOppoOptimized = containers.all {
+    val isOppoOptimized = containers.any {
         it.resolution == "800x600" &&
         it.graphicsDriver == OpenGLDriver.VIRGL &&
         it.dxWrapper == DXWrapper.WINE_D3D
     }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
     val isExpandedScreen = configuration.screenWidthDp >= 600
 
@@ -103,6 +169,15 @@ fun DashboardScreen(
 
                 // Navigation list
                 SidebarItem(
+                    title = "Quick Launch",
+                    icon = Icons.Default.RocketLaunch,
+                    isActive = activeSection == DashboardSection.QUICK_LAUNCH,
+                    onClick = {
+                        activeSection = DashboardSection.QUICK_LAUNCH
+                        scope.launch { drawerState.close() }
+                    }
+                )
+                SidebarItem(
                     title = "Wine Containers",
                     icon = Icons.Default.Folder,
                     isActive = activeSection == DashboardSection.CONTAINERS,
@@ -135,6 +210,42 @@ fun DashboardScreen(
                     isActive = activeSection == DashboardSection.OPPO_TUNING_GUIDE,
                     onClick = {
                         activeSection = DashboardSection.OPPO_TUNING_GUIDE
+                        scope.launch { drawerState.close() }
+                    }
+                )
+                SidebarItem(
+                    title = "Native Modules",
+                    icon = Icons.Default.Extension,
+                    isActive = activeSection == DashboardSection.ADDITIONAL_MODULES,
+                    onClick = {
+                        activeSection = DashboardSection.ADDITIONAL_MODULES
+                        scope.launch { drawerState.close() }
+                    }
+                )
+                SidebarItem(
+                    title = "Marketplace",
+                    icon = Icons.Default.Storefront,
+                    isActive = activeSection == DashboardSection.MARKETPLACE,
+                    onClick = {
+                        activeSection = DashboardSection.MARKETPLACE
+                        scope.launch { drawerState.close() }
+                    }
+                )
+                SidebarItem(
+                    title = "File Explorer",
+                    icon = Icons.Default.Explore,
+                    isActive = activeSection == DashboardSection.EXPLORER,
+                    onClick = {
+                        activeSection = DashboardSection.EXPLORER
+                        scope.launch { drawerState.close() }
+                    }
+                )
+                SidebarItem(
+                    title = "Settings",
+                    icon = Icons.Default.Settings,
+                    isActive = activeSection == DashboardSection.SETTINGS,
+                    onClick = {
+                        activeSection = DashboardSection.SETTINGS
                         scope.launch { drawerState.close() }
                     }
                 )
@@ -216,16 +327,25 @@ fun DashboardScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground.copy(alpha = 0.8f))
                 )
             }
         ) { innerPadding ->
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .background(DarkBackground)
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Image(
+                    painter = painterResource(id = R.drawable.rofwin_tech_background_1784257313521),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.2f
+                )
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .background(DarkBackground.copy(alpha = 0.7f))
+                ) {
                 // Left Navigation Rail/Sidebar (Optimized for both Compact and Expanded screen widths)
                 if (isExpandedScreen) {
                     Column(
@@ -236,6 +356,12 @@ fun DashboardScreen(
                             .padding(vertical = 16.dp, horizontal = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        SidebarItem(
+                            title = "Quick Launch",
+                            icon = Icons.Default.RocketLaunch,
+                            isActive = activeSection == DashboardSection.QUICK_LAUNCH,
+                            onClick = { activeSection = DashboardSection.QUICK_LAUNCH }
+                        )
                         SidebarItem(
                             title = "Wine Containers",
                             icon = Icons.Default.Folder,
@@ -259,6 +385,30 @@ fun DashboardScreen(
                             icon = Icons.Default.AutoAwesome,
                             isActive = activeSection == DashboardSection.OPPO_TUNING_GUIDE,
                             onClick = { activeSection = DashboardSection.OPPO_TUNING_GUIDE }
+                        )
+                        SidebarItem(
+                            title = "Native Modules",
+                            icon = Icons.Default.Extension,
+                            isActive = activeSection == DashboardSection.ADDITIONAL_MODULES,
+                            onClick = { activeSection = DashboardSection.ADDITIONAL_MODULES }
+                        )
+                        SidebarItem(
+                            title = "Marketplace",
+                            icon = Icons.Default.Storefront,
+                            isActive = activeSection == DashboardSection.MARKETPLACE,
+                            onClick = { activeSection = DashboardSection.MARKETPLACE }
+                        )
+                        SidebarItem(
+                            title = "Explorer",
+                            icon = Icons.Default.Explore,
+                            isActive = activeSection == DashboardSection.EXPLORER,
+                            onClick = { activeSection = DashboardSection.EXPLORER }
+                        )
+                        SidebarItem(
+                            title = "Settings",
+                            icon = Icons.Default.Settings,
+                            isActive = activeSection == DashboardSection.SETTINGS,
+                            onClick = { activeSection = DashboardSection.SETTINGS }
                         )
                         SidebarItem(
                             title = "Build & Download",
@@ -288,6 +438,9 @@ fun DashboardScreen(
                         .padding(16.dp)
                 ) {
                     when (activeSection) {
+                        DashboardSection.QUICK_LAUNCH -> {
+                            QuickLaunchScreen(onLaunch = { app -> /* Handle launch */ })
+                        }
                         DashboardSection.CONTAINERS -> {
                             // Containers Grid / List
                             Column(modifier = Modifier.fillMaxSize()) {
@@ -335,8 +488,12 @@ fun DashboardScreen(
                                                         name = "${container.name} (Copy)"
                                                     )
                                                 )
+                                                manualSave()
                                             },
-                                            onDelete = { containers.remove(container) }
+                                            onDelete = {
+                                                containers.remove(container)
+                                                manualSave()
+                                            }
                                         )
                                     }
                                 }
@@ -354,6 +511,19 @@ fun DashboardScreen(
                             // CPH1823 Hardware Optimization Companion Guide
                             OppoTuningGuideScreen()
                         }
+                        DashboardSection.ADDITIONAL_MODULES -> {
+                            // Native extension modules (Gladio, Alsa, etc.)
+                            AdditionalModulesScreen()
+                        }
+                        DashboardSection.MARKETPLACE -> {
+                            MarketplaceScreen()
+                        }
+                        DashboardSection.EXPLORER -> {
+                            ExplorerScreen()
+                        }
+                        DashboardSection.SETTINGS -> {
+                            SettingsScreen()
+                        }
                         DashboardSection.BUILD_APK -> {
                             // Compile & Export Center
                             BuildApkScreen()
@@ -363,6 +533,7 @@ fun DashboardScreen(
             }
         }
     }
+}
 
     // Add / Edit Container Dialog
     if (showFormDialog) {
@@ -377,6 +548,7 @@ fun DashboardScreen(
                     containers.add(saved)
                 }
                 showFormDialog = false
+                manualSave()
             }
         )
     }
@@ -1108,6 +1280,350 @@ fun DownloadStepRow(stepNumber: String, title: String, desc: String) {
             Text(title, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
             Spacer(modifier = Modifier.height(2.dp))
             Text(desc, fontSize = 11.sp, color = TextSecondary)
+        }
+    }
+}
+
+@Composable
+fun QuickLaunchScreen(onLaunch: (String) -> Unit) {
+    val quickApps = remember {
+        listOf(
+            Triple("WinRAR 7.0", Icons.Default.FolderZip, "ZIP"),
+            Triple("Python 3.12", Icons.Default.Code, "PY"),
+            Triple("MetaTrader 5", Icons.Default.TrendingUp, "MQL"),
+            Triple("Git Bash", Icons.Default.Terminal, "BASH"),
+            Triple("SSH Connect", Icons.Default.CloudSync, "SSH"),
+            Triple("Web Browser", Icons.Default.Language, "WEB"),
+            Triple("AI Agent Route", Icons.Default.Route, "AI")
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            "Quick Launch",
+            style = MaterialTheme.typography.titleLarge.copy(color = Color.White)
+        )
+        Text(
+            "Pinned Windows applications for Mali-G72 direct execution",
+            fontSize = 12.sp,
+            color = TextSecondary,
+            modifier = Modifier.padding(bottom = 20.dp)
+        )
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 100.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(quickApps) { (name, icon, badge) ->
+                QuickAppCard(name = name, icon = icon, badge = badge, onClick = { onLaunch(name) })
+            }
+        }
+    }
+}
+
+@Composable
+fun QuickAppCard(name: String, icon: ImageVector, badge: String, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        modifier = Modifier
+            .aspectRatio(0.85f)
+            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(PrimarySky.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = name,
+                    tint = PrimarySky,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = name,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = badge,
+                fontSize = 9.sp,
+                color = if (badge == "MQL") SecondaryTeal else PrimarySky,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier
+                    .background((if (badge == "MQL") SecondaryTeal else PrimarySky).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen() {
+    val settings = remember {
+        listOf(
+            "General" to Icons.Default.Tune,
+            "Graphics & Rendering" to Icons.Default.DisplaySettings,
+            "Audio Engine" to Icons.Default.AudioFile,
+            "Network & Proxy" to Icons.Default.Dns,
+            "Advanced Box64" to Icons.Default.Code,
+            "Updates & Feedback" to Icons.Default.Update
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("Full Settings", style = MaterialTheme.typography.titleLarge.copy(color = Color.White))
+        Text("Configure Rofwin engine and UI preferences", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(bottom = 16.dp))
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(settings) { (title, icon) ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    modifier = Modifier.fillMaxWidth().clickable { /* Open sub-settings */ }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(icon, contentDescription = null, tint = PrimarySky, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(title, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Click to manage $title parameters.", fontSize = 11.sp, color = TextSecondary)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExplorerScreen() {
+    var path by remember { mutableStateOf("C:\\Users\\Admin\\Documents") }
+    val files = remember {
+        listOf(
+            "Downloads" to Icons.Default.Download,
+            "Documents" to Icons.Default.Description,
+            "Desktop" to Icons.Default.DesktopWindows,
+            "Games" to Icons.Default.Gamepad,
+            "MetaTrader 5" to Icons.Default.TrendingUp,
+            "lasokamodule.exe" to Icons.Default.DataObject
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("File Explorer", style = MaterialTheme.typography.titleLarge.copy(color = Color.White))
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth().background(DarkSurface, RoundedCornerShape(8.dp)).padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Folder, contentDescription = null, tint = PrimarySky)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(path, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 100.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(files) { (name, icon) ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { /* Navigate */ }.padding(8.dp)
+                ) {
+                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(name, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MarketplaceScreen() {
+    val items = remember {
+        listOf(
+            Triple("WinRAR Full", "Professional archive manager for .rar and .zip files.", Icons.Default.FolderZip),
+            Triple("Python 3.12 Shell", "Native Python interpreter with pip support.", Icons.Default.Code),
+            Triple("SSH Connection Manager", "Securely connect to remote devices via SSH/SFTP.", Icons.Default.CloudSync),
+            Triple("DirectX 11 Wrapper", "Native translation for DX11 titles on Mali.", Icons.Default.ElectricalServices),
+            Triple("Chromium Browser", "Lightweight web peramban for downloading patches.", Icons.Default.Language),
+            Triple("AI ROC Route", "Intelligent agent routing for network optimization.", Icons.Default.Route),
+            Triple("PowerShell Core", "Execute .ps1 scripts natively in Wine.", Icons.Default.Power),
+            Triple("Lasoka Tools", "Advanced diagnostic tools for Helio P60.", Icons.Default.SettingsSuggest)
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("Marketplace", style = MaterialTheme.typography.titleLarge.copy(color = Color.White))
+        Text("Download and install additional modules for ROFWIN", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(bottom = 16.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 160.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(items) { (name, desc, icon) ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    modifier = Modifier.border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Icon(icon, contentDescription = null, tint = PrimarySky, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(name, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                        Text(desc, fontSize = 11.sp, color = TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { /* Download sim */ },
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("Install", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdditionalModulesScreen() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text("Additional Native Modules", style = MaterialTheme.typography.titleLarge.copy(color = Color.White))
+            Text("Manage supplementary drivers and compatibility layers", fontSize = 12.sp, color = TextSecondary)
+        }
+
+        item {
+            ModuleCard(
+                title = "Gladio v1.0",
+                subtitle = "OpenGL/Vulkan Translation Library",
+                description = "Optimized shader compiler for Mali-G72 GPUs. Reduces stuttering in 3D titles on Oppo F9.",
+                icon = Icons.Default.DeveloperBoard,
+                status = "Installed & Active",
+                statusColor = SecondaryTeal
+            )
+        }
+
+        item {
+            ModuleCard(
+                title = "Lasoka Module v2.1",
+                subtitle = "Enhanced Execution Layer",
+                description = "Specialized binary hooks for Oppo F9 CPH1823 firmware. Improves memory pressure handling and decreases page faults.",
+                icon = Icons.Default.PrecisionManufacturing,
+                status = "Optimized",
+                statusColor = SecondaryTeal
+            )
+        }
+
+        item {
+            ModuleCard(
+                title = "Android ALSA Bridge",
+                subtitle = "High-Performance Audio Backend",
+                description = "Low-latency audio server specifically tuned for Android kernel drivers. Supports CPH1823 aserver.",
+                icon = Icons.Default.GraphicEq,
+                status = "Running",
+                statusColor = SecondaryTeal
+            )
+        }
+
+        item {
+            ModuleCard(
+                title = "Glibc x86_64 Patches",
+                subtitle = "System Call Translation Hooks",
+                description = "Custom patches for sysdeps to support wine-specific threading on ARM64 host kernels.",
+                icon = Icons.Default.BugReport,
+                status = "Version 2.38 (Patched)",
+                statusColor = PrimarySky
+            )
+        }
+
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                modifier = Modifier.fillMaxWidth().border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Module Repository", fontWeight = FontWeight.Bold, color = Color.White)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("External Module Link (Community):", fontSize = 12.sp, color = TextSecondary)
+                    Text(
+                        text = "https://ai.studio/apps/62c90df9-103c-47f1-b8d1-9d05960dfa36",
+                        fontSize = 11.sp,
+                        color = PrimarySky,
+                        textDecoration = TextDecoration.Underline
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { /* Launch browser simulation */ }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Open Module Marketplace")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModuleCard(title: String, subtitle: String, description: String, icon: ImageVector, status: String, statusColor: Color) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        modifier = Modifier.fillMaxWidth().border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp))
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier.size(40.dp).background(Color(0x1AFFFFFF), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = PrimarySky, modifier = Modifier.size(24.dp))
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                Text(subtitle, fontSize = 12.sp, color = PrimarySky, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(description, fontSize = 12.sp, color = TextSecondary)
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(statusColor, CircleShape))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(status, fontSize = 11.sp, color = statusColor, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
