@@ -55,7 +55,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
@@ -90,6 +92,16 @@ fun WineDesktopSim(
     // Window offsets (simple dragging support)
     var windowOffset by remember { mutableStateOf(Offset(50f, 100f)) }
     var minimizedWindows = remember { mutableStateListOf<DesktopWindow>() }
+
+    // Windows-style window state (Rofwin 1.3.0): maximize / restore / true-fullscreen / low-RAM
+    var isMaximized by remember { mutableStateOf(false) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var lowRamMode by remember { mutableStateOf(prefs.getBoolean("low_ram", false)) }
+    val openWin: (DesktopWindow) -> Unit = { w ->
+        openWindow = w
+        isMaximized = false
+        isFullscreen = false
+    }
 
     // File Explorer State
     var currentPath by remember { mutableStateOf("C:\\") }
@@ -273,12 +285,15 @@ fun WineDesktopSim(
                     )
                 )
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.rofwin_background_1784258475774),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+            // Wallpaper dinonaktifkan pada Low-RAM Mode (hemat decode bitmap besar di RAM 4GB)
+            if (!lowRamMode) {
+                Image(
+                    painter = painterResource(id = R.drawable.rofwin_background_1784258475774),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             // Auto-save logic (prevent data loss during closures)
             LaunchedEffect(Unit) {
@@ -299,42 +314,42 @@ fun WineDesktopSim(
                 DesktopIconButton(
                     name = "My Computer",
                     icon = Icons.Default.Computer,
-                    onClick = { openWindow = DesktopWindow.MY_COMPUTER }
+                    onClick = { openWin(DesktopWindow.MY_COMPUTER) }
                 )
                 DesktopIconButton(
                     name = "Web Browser",
                     icon = Icons.Default.Language,
-                    onClick = { openWindow = DesktopWindow.BROWSER }
+                    onClick = { openWin(DesktopWindow.BROWSER) }
                 )
                 DesktopIconButton(
                     name = "Git Bash",
                     icon = Icons.Default.Terminal,
-                    onClick = { openWindow = DesktopWindow.GIT_BASH }
+                    onClick = { openWin(DesktopWindow.GIT_BASH) }
                 )
                 DesktopIconButton(
                     name = "AI ROC Route",
                     icon = Icons.Default.Route,
-                    onClick = { openWindow = DesktopWindow.AI_ROUTE }
+                    onClick = { openWin(DesktopWindow.AI_ROUTE) }
                 )
                 DesktopIconButton(
                     name = "WinRAR",
                     icon = Icons.Default.FolderZip,
-                    onClick = { openWindow = DesktopWindow.WINRAR }
+                    onClick = { openWin(DesktopWindow.WINRAR) }
                 )
                 DesktopIconButton(
                     name = "Python 3",
                     icon = Icons.Default.Code,
-                    onClick = { openWindow = DesktopWindow.PYTHON_SHELL }
+                    onClick = { openWin(DesktopWindow.PYTHON_SHELL) }
                 )
                 DesktopIconButton(
                     name = "SSH Connect",
                     icon = Icons.Default.CloudSync,
-                    onClick = { openWindow = DesktopWindow.SSH_MANAGER }
+                    onClick = { openWin(DesktopWindow.SSH_MANAGER) }
                 )
                 DesktopIconButton(
                     name = "Task Manager",
                     icon = Icons.Default.AlignVerticalBottom,
-                    onClick = { openWindow = DesktopWindow.TASK_MANAGER }
+                    onClick = { openWin(DesktopWindow.TASK_MANAGER) }
                 )
             }
 
@@ -377,7 +392,7 @@ fun WineDesktopSim(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp))
                                     .background(Color.White.copy(alpha = 0.05f))
-                                    .clickable { openWindow = win }
+                                    .clickable { openWin(win) }
                                     .padding(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
@@ -390,26 +405,38 @@ fun WineDesktopSim(
                 }
             }
 
-            // Interactive Windows
+            // Interactive Windows (Windows-style 1.3.0: drag / maximize / fullscreen / minimize)
             if (openWindow != DesktopWindow.NONE) {
-                Box(
-                    modifier = Modifier
+                val windowModifier = when {
+                    isFullscreen -> Modifier
+                        .fillMaxSize()
+                        .zIndex(3f)
+                        .background(DarkSurface)
+                    isMaximized -> Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 48.dp)
+                        .zIndex(2f)
+                        .background(DarkSurface)
+                    else -> Modifier
                         .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
                         .width(420.dp)
                         .height(350.dp)
                         .background(DarkSurface, RoundedCornerShape(8.dp))
                         .border(1.dp, PrimarySky, RoundedCornerShape(8.dp))
-                ) {
+                }
+                Box(modifier = windowModifier) {
                     Column {
                         // Title bar
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(PrimarySky)
-                                .pointerInput(Unit) {
+                                .pointerInput(isMaximized, isFullscreen) {
                                     detectDragGestures { change, dragAmount ->
                                         change.consume()
-                                        windowOffset += dragAmount
+                                        if (!isMaximized && !isFullscreen) {
+                                            windowOffset += dragAmount
+                                        }
                                     }
                                 }
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -433,17 +460,57 @@ fun WineDesktopSim(
                                 )
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                // [—] Minimize ke taskbar
                                 IconButton(
                                     onClick = {
                                         minimizedWindows.add(openWindow)
                                         openWindow = DesktopWindow.NONE
+                                        isMaximized = false
+                                        isFullscreen = false
                                     },
                                     modifier = Modifier.size(24.dp)
                                 ) {
                                     Icon(Icons.Default.Minimize, contentDescription = "Minimize", tint = Color.Black)
                                 }
+                                // [□] Maximize / Restore (ala Windows, taskbar tetap terlihat)
                                 IconButton(
-                                    onClick = { openWindow = DesktopWindow.NONE },
+                                    onClick = {
+                                        if (isFullscreen) {
+                                            isFullscreen = false
+                                            isMaximized = true
+                                        } else {
+                                            isMaximized = !isMaximized
+                                        }
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isMaximized || isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                        contentDescription = if (isMaximized || isFullscreen) "Restore Down" else "Maximize",
+                                        tint = Color.Black
+                                    )
+                                }
+                                // [⛶] Full Screen sejati (menutupi taskbar — gaya F11 Chrome)
+                                IconButton(
+                                    onClick = {
+                                        isFullscreen = !isFullscreen
+                                        if (isFullscreen) isMaximized = false
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isFullscreen) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
+                                        contentDescription = if (isFullscreen) "Exit Full Screen" else "Full Screen",
+                                        tint = if (isFullscreen) Color(0xFF6A1B9A) else Color.Black
+                                    )
+                                }
+                                // [✕] Close
+                                IconButton(
+                                    onClick = {
+                                        openWindow = DesktopWindow.NONE
+                                        isMaximized = false
+                                        isFullscreen = false
+                                    },
                                     modifier = Modifier.size(24.dp)
                                 ) {
                                     Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Black)
@@ -753,8 +820,14 @@ fun WineDesktopSim(
                                     }
                                 }
                                 DesktopWindow.COMMAND_PROMPT -> {
-                                    // Interactive Terminal Prompt
-                                    TerminalWindow(container, commandLogs, terminalInput, onInputChange = { terminalInput = it })
+                                    // Interactive Terminal (cmd.exe + powershell.exe mode)
+                                    TerminalWindow(
+                                        container = container,
+                                        commandLogs = commandLogs,
+                                        terminalInput = terminalInput,
+                                        onInputChange = { terminalInput = it },
+                                        onLaunch = { w -> openWin(w) }
+                                    )
                                 }
                                 DesktopWindow.WINRAR -> {
                                     WinRarWindow()
@@ -766,7 +839,7 @@ fun WineDesktopSim(
                                     SshManagerWindow()
                                 }
                                 DesktopWindow.MT5 -> {
-                                    Mt5Window()
+                                    Mt5Window(lowRam = lowRamMode)
                                 }
                                 DesktopWindow.MQL5_EDITOR -> {
                                     Mql5EditorWindow()
@@ -862,9 +935,11 @@ fun WineDesktopSim(
                                     if (win == openWindow) {
                                         minimizedWindows.add(win)
                                         openWindow = DesktopWindow.NONE
+                                        isMaximized = false
+                                        isFullscreen = false
                                     } else {
                                         minimizedWindows.remove(win)
-                                        openWindow = win
+                                        openWin(win)
                                     }
                                 }
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -950,8 +1025,8 @@ fun WineDesktopSim(
                 }
             }
 
-            // Start Menu Dropup
-            if (startMenuOpen) {
+            // Start Menu Dropup (disembunyikan saat Full Screen sejati)
+            if (startMenuOpen && !isFullscreen) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -970,24 +1045,33 @@ fun WineDesktopSim(
                     )
                     Divider()
                     StartMenuItem("My Computer", Icons.Default.Computer) {
-                        openWindow = DesktopWindow.MY_COMPUTER
+                        openWin(DesktopWindow.MY_COMPUTER)
                         startMenuOpen = false
                     }
                     StartMenuItem("Registry Editor", Icons.Default.Settings) {
-                        openWindow = DesktopWindow.REGISTRY_EDITOR
+                        openWin(DesktopWindow.REGISTRY_EDITOR)
                         startMenuOpen = false
                     }
                     StartMenuItem("Task Manager", Icons.Default.AlignVerticalBottom) {
-                        openWindow = DesktopWindow.TASK_MANAGER
+                        openWin(DesktopWindow.TASK_MANAGER)
                         startMenuOpen = false
                     }
-                    StartMenuItem("Command Prompt", Icons.Default.Terminal) {
-                        openWindow = DesktopWindow.COMMAND_PROMPT
+                    StartMenuItem("Command Prompt / PowerShell", Icons.Default.Terminal) {
+                        openWin(DesktopWindow.COMMAND_PROMPT)
                         startMenuOpen = false
                     }
                     StartMenuItem("DirectX Diag", Icons.Default.Info) {
-                        openWindow = DesktopWindow.DX_DIAG
+                        openWin(DesktopWindow.DX_DIAG)
                         startMenuOpen = false
+                    }
+                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                    StartMenuItem(
+                        text = if (lowRamMode) "Low-RAM Mode: ON (hemat 4GB)" else "Low-RAM Mode: OFF",
+                        icon = Icons.Default.Memory,
+                        tint = if (lowRamMode) SecondaryTeal else Color.White
+                    ) {
+                        lowRamMode = !lowRamMode
+                        prefs.edit().putBoolean("low_ram", lowRamMode).apply()
                     }
                     Divider(modifier = Modifier.padding(vertical = 4.dp))
                     StartMenuItem("Log Out / Close", Icons.Default.PowerSettingsNew, Color.Red) {
@@ -1090,9 +1174,9 @@ fun getWindowTitle(window: DesktopWindow): String {
         DesktopWindow.MY_COMPUTER -> "My Computer"
         DesktopWindow.REGISTRY_EDITOR -> "Registry Editor (regedit.exe)"
         DesktopWindow.TASK_MANAGER -> "Wine Task Manager"
-        DesktopWindow.COMMAND_PROMPT -> "Command Prompt"
+        DesktopWindow.COMMAND_PROMPT -> "Command Prompt / PowerShell"
         DesktopWindow.DX_DIAG -> "DirectX Diagnostic Tool (dxdiag)"
-        DesktopWindow.BROWSER -> "Chromium Web Peramban"
+        DesktopWindow.BROWSER -> "Google Chrome"
         DesktopWindow.GIT_BASH -> "Git Bash Terminal"
         DesktopWindow.AI_ROUTE -> "AI ROC-AgentsRoute v1.0"
         DesktopWindow.WINRAR -> "WinRAR (Unregistered Evaluation Copy)"
@@ -1104,26 +1188,248 @@ fun getWindowTitle(window: DesktopWindow): String {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalWindow(
     container: WineContainer,
     commandLogs: MutableList<String>,
     terminalInput: String,
-    onInputChange: (String) -> Unit
+    onInputChange: (String) -> Unit,
+    onLaunch: (DesktopWindow) -> Unit
 ) {
+    // Mode terminal: cmd.exe (hitam-hijau) atau powershell.exe (biru-putih)
+    var psMode by remember { mutableStateOf(false) }
+    var cwd by remember { mutableStateOf("C:\\Windows\\System32") }
+    val bgColor = if (psMode) Color(0xFF012456) else Color.Black
+    val fgColor = if (psMode) Color.White else Color.Green
+    val prompt = if (psMode) "PS $cwd> " else "$cwd>"
+
+    fun exec(raw: String) {
+        val input = raw.trim()
+        if (input.isEmpty()) return
+        commandLogs.add("$prompt$input")
+        val cmd = input.lowercase()
+        val arg = input.substringAfter(' ', "").trim()
+
+        fun unknown() {
+            if (psMode) commandLogs.add("$input : The term '$input' is not recognized as the name of a cmdlet, function, script file, or operable program.")
+            else commandLogs.add("'$input' is not recognized as an internal or external command, operable program or batch file.")
+        }
+
+        when {
+            // ---- Mode switching ----
+            psMode && (cmd == "exit" || cmd == "cmd" || cmd == "cmd.exe") -> {
+                psMode = false
+                commandLogs.add("Leaving Windows PowerShell session...")
+            }
+            !psMode && (cmd == "powershell" || cmd == "powershell.exe" || cmd == "pwsh" || cmd.startsWith("ps1 ")) -> {
+                psMode = true
+                commandLogs.add("Windows PowerShell")
+                commandLogs.add("Copyright (C) Rofwin Corporation. All rights reserved.")
+                commandLogs.add("")
+                commandLogs.add("Install the latest PowerShell for new features: not required, this is Rofwin :)")
+            }
+            cmd == "exit" -> {
+                commandLogs.clear()
+                commandLogs.add("(session cleared — type 'help' for commands)")
+            }
+
+            // ---- Help ----
+            cmd == "help" || cmd == "?" || cmd == "/?" || cmd == "get-help" || cmd.startsWith("get-help ") -> {
+                commandLogs.add("ROFWIN COMMAND REFERENCE ${if (psMode) "(PowerShell)" else "(cmd.exe)"}:")
+                commandLogs.add("  help / ver / cls / exit        Session basics")
+                commandLogs.add("  dir / cd <path> / tree         File system")
+                commandLogs.add("  echo <text> / set              Environment")
+                commandLogs.add("  ipconfig / netstat / ping <h>  Networking")
+                commandLogs.add("  tasklist / taskkill / systeminfo   Processes & specs")
+                commandLogs.add("  whoami / hostname / date / time    Identity")
+                commandLogs.add("  start <app>   (explorer, chrome, mt5, metaeditor)")
+                commandLogs.add("  mt5 / terminal64.exe           Launch MetaTrader 5")
+                commandLogs.add("  metaeditor / mql5              Launch MQL5 Editor")
+                commandLogs.add("  wine --version / winetricks    Wine engine")
+                if (psMode) commandLogs.add("  Get-Process / Get-ChildItem / Get-Date / Get-Host (alias OK)")
+                if (!psMode) commandLogs.add("  powershell                     Switch to PowerShell mode")
+            }
+
+            // ---- System ----
+            cmd == "ver" -> commandLogs.add("Rofwin Windows [Version 10.0.19045.4046] (Wine 8.0.2 x86_64)")
+            cmd == "cls" || cmd == "clear" -> commandLogs.clear()
+            cmd == "echo" -> commandLogs.add("ECHO is on.")
+            cmd.startsWith("echo ") -> commandLogs.add(input.substringAfter(' '))
+            cmd == "set" -> {
+                commandLogs.add("ProgramFiles=C:\\Program Files")
+                commandLogs.add("SystemRoot=C:\\Windows")
+                commandLogs.add("TEMP=C:\\users\\Administrator\\Temp")
+                commandLogs.add("WINEDEBUG=-all")
+                commandLogs.add("BOX64_DYNAREC=1")
+            }
+            cmd == "whoami" -> commandLogs.add("rofwin-virt-pc\\administrator")
+            cmd == "hostname" -> commandLogs.add("ROFWIN-VIRT-PC")
+            cmd == "date" || cmd == "date /t" || cmd == "get-date" ->
+                commandLogs.add(SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date()))
+            cmd == "time" || cmd == "time /t" ->
+                commandLogs.add(SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()))
+            cmd == "get-host" -> {
+                commandLogs.add("Name             : ConsoleHost   5.1.19045.4046")
+                commandLogs.add("InstanceId       : 8f2c1d44-rofwin-sim-0001")
+            }
+
+            // ---- Filesystem ----
+            cmd == "dir" || cmd == "ls" || cmd == "gci" || cmd == "get-childitem" -> {
+                commandLogs.add(" Directory of $cwd")
+                commandLogs.add("")
+                commandLogs.add("07/16/2026  10:24 AM    <DIR>          .")
+                commandLogs.add("07/16/2026  10:24 AM    <DIR>          ..")
+                if (cwd.startsWith("C:\\Windows")) {
+                    commandLogs.add("07/16/2026  10:24 AM           820,112 kernel32.dll")
+                    commandLogs.add("07/16/2026  10:24 AM           640,992 user32.dll")
+                    commandLogs.add("07/16/2026  10:24 AM           310,240 gdi32.dll")
+                    commandLogs.add("07/16/2026  10:24 AM            98,304 cmd.exe")
+                    commandLogs.add("07/16/2026  10:24 AM           251,904 powershell.exe")
+                } else {
+                    commandLogs.add("07/16/2026  10:24 AM    <DIR>          users")
+                    commandLogs.add("07/16/2026  10:24 AM    <DIR>          Program Files")
+                    commandLogs.add("07/16/2026  10:24 AM    <DIR>          Windows")
+                    commandLogs.add("07/16/2026  10:24 AM               256 boot.ini")
+                }
+                commandLogs.add("               4 Dir(s)  18,446,744,073,709,551,616 bytes free")
+            }
+            cmd == "cd" || cmd == "chdir" || cmd == "pwd" || cmd == "get-location" -> commandLogs.add(cwd)
+            cmd.startsWith("cd ") || cmd.startsWith("chdir ") || cmd.startsWith("set-location ") -> {
+                val t = arg.replace("/", "\\")
+                cwd = when {
+                    t == ".." -> cwd.substringBeforeLast('\\', "C:\\")
+                    t == "\\" -> cwd.substringBefore('\\') + "\\"
+                    t.contains(":") -> t.trimEnd('\\')
+                    else -> (cwd.trimEnd('\\') + "\\" + t).trimEnd('\\')
+                }
+                commandLogs.add("(now in $cwd)")
+            }
+            cmd == "tree" -> {
+                commandLogs.add("C:\\")
+                commandLogs.add("+---Windows")
+                commandLogs.add("|   \\---System32")
+                commandLogs.add("+---Program Files")
+                commandLogs.add("|   +---DirectX")
+                commandLogs.add("|   \\---WineD3D")
+                commandLogs.add("\\---users")
+                commandLogs.add("    \\---Administrator")
+            }
+
+            // ---- Networking ----
+            cmd == "ipconfig" || cmd == "ipconfig /all" -> {
+                commandLogs.add("Windows IP Configuration")
+                commandLogs.add("")
+                commandLogs.add("Ethernet adapter Wine0:")
+                commandLogs.add("   IPv4 Address. . . . . . . . . . . : 10.0.2.15")
+                commandLogs.add("   Subnet Mask . . . . . . . . . . . : 255.255.255.0")
+                commandLogs.add("   Default Gateway . . . . . . . . . : 10.0.2.2")
+                commandLogs.add("   DNS Servers . . . . . . . . . . . : 8.8.8.8")
+            }
+            cmd == "netstat" || cmd.startsWith("netstat ") -> {
+                commandLogs.add("Active Connections")
+                commandLogs.add("  Proto  Local Address      Foreign Address    State")
+                commandLogs.add("  TCP    10.0.2.15:49152    10.0.2.2:53          ESTABLISHED")
+                commandLogs.add("  TCP    10.0.2.15:50001    wine.roadfx:443      TIME_WAIT")
+            }
+            cmd.startsWith("ping") -> {
+                val host = if (arg.isEmpty()) "8.8.8.8" else arg
+                commandLogs.add("Pinging $host with 32 bytes of data:")
+                commandLogs.add("Reply from $host: bytes=32 time=41ms TTL=117")
+                commandLogs.add("Reply from $host: bytes=32 time=38ms TTL=117")
+                commandLogs.add("Reply from $host: bytes=32 time=45ms TTL=117")
+                commandLogs.add("Reply from $host: bytes=32 time=39ms TTL=117")
+                commandLogs.add("Ping statistics: Packets: Sent = 4, Received = 4, Lost = 0 (0% loss)")
+            }
+
+            // ---- Processes ----
+            cmd == "tasklist" || cmd == "ps" || cmd == "get-process" -> {
+                commandLogs.add("Image Name                     PID   Mem Usage")
+                commandLogs.add("=========================   =======   =========")
+                commandLogs.add("explorer.exe                  1024     12,412 K")
+                commandLogs.add("services.exe                   512      4,096 K")
+                commandLogs.add("wineserver                     640     32,768 K")
+                commandLogs.add("box64                          768     48,128 K")
+                commandLogs.add("chrome.exe                    2048    156,672 K")
+            }
+            cmd.startsWith("taskkill") || cmd.startsWith("stop-process") ->
+                commandLogs.add("SUCCESS: The process has been terminated.")
+            cmd == "systeminfo" || cmd == "msinfo32" -> {
+                commandLogs.add("Host Name        : ROFWIN-VIRT-PC")
+                commandLogs.add("OS Name          : Rofwin Windows 10 Pro (Wine 8.0.2)")
+                commandLogs.add("Host Device      : Oppo CPH1823 (Oppo F9)")
+                commandLogs.add("Processor        : MediaTek Helio P60 MT6771, 8 Core(s) @2.00GHz")
+                commandLogs.add("GPU              : ARM Mali-G72 MP3 (VirGL)")
+                commandLogs.add("Total Memory     : 4,096 MB LPDDR4X")
+                commandLogs.add("Active Preset    : ${container.box64Preset} mode")
+            }
+
+            // ---- Launch other windows (seperti 'start' asli) ----
+            cmd == "start" || cmd == "start explorer" || cmd == "explorer" || cmd == "explorer.exe" || cmd == "invoke-item ." -> {
+                commandLogs.add("Opening File Explorer...")
+                onLaunch(DesktopWindow.MY_COMPUTER)
+            }
+            cmd.startsWith("start chrome") || cmd == "chrome" || cmd == "msedge" || cmd == "iexplore" || cmd.startsWith("start msedge") -> {
+                commandLogs.add("Starting Chrome...")
+                onLaunch(DesktopWindow.BROWSER)
+            }
+            cmd == "mt5" || cmd == "terminal64.exe" || cmd == "start terminal64.exe" -> {
+                commandLogs.add("Loading MetaTrader 5 terminal...")
+                onLaunch(DesktopWindow.MT5)
+            }
+            cmd == "metaeditor" || cmd == "metaeditor64.exe" || cmd == "mql5" || cmd == "start metaeditor64.exe" -> {
+                commandLogs.add("Loading MetaEditor (MQL5)...")
+                onLaunch(DesktopWindow.MQL5_EDITOR)
+            }
+            cmd.startsWith("start ") -> commandLogs.add("Starting '${input.substringAfter("start ")}' (simulated).")
+
+            // ---- Wine extras ----
+            cmd == "wine --version" -> commandLogs.add("wine-8.0.2 (Rofwin Dynamic Build x86_64)")
+            cmd == "winetricks" || cmd.startsWith("winetricks ") -> {
+                commandLogs.add("Winetricks loader:")
+                commandLogs.add("Installing corefonts, d3dx9, d3dcompiler_47... SUCCESS.")
+            }
+
+            else -> unknown()
+        }
+        commandLogs.add("")
+        onInputChange("")
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        // Session chips: ketuk untuk pindah cmd <-> PowerShell (ramah layar sentuh)
+        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !psMode,
+                onClick = { psMode = false },
+                label = { Text("cmd.exe", fontSize = 10.sp) }
+            )
+            FilterChip(
+                selected = psMode,
+                onClick = { psMode = true },
+                label = { Text("powershell.exe", fontSize = 10.sp) }
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                "ketik 'help'",
+                fontSize = 10.sp,
+                color = TextSecondary,
+                modifier = Modifier.align(Alignment.CenterVertically)
+            )
+        }
+
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(Color.Black)
+                .background(bgColor, RoundedCornerShape(4.dp))
                 .padding(6.dp)
         ) {
             items(commandLogs) { log ->
                 Text(
                     text = log,
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = Color.Green,
+                        color = fgColor,
                         fontFamily = FontFamily.Monospace
                     )
                 )
@@ -1133,81 +1439,35 @@ fun TerminalWindow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.Black)
+                .background(bgColor, RoundedCornerShape(4.dp))
                 .padding(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("C:\\Windows\\System32>", color = Color.Green, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            Text(prompt, color = fgColor, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
             Spacer(modifier = Modifier.width(4.dp))
             TextField(
                 value = terminalInput,
                 onValueChange = onInputChange,
                 singleLine = true,
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Black,
-                    unfocusedContainerColor = Color.Black,
-                    focusedTextColor = Color.Green,
-                    unfocusedTextColor = Color.Green
+                    focusedContainerColor = bgColor,
+                    unfocusedContainerColor = bgColor,
+                    focusedTextColor = fgColor,
+                    unfocusedTextColor = fgColor,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
                 ),
                 textStyle = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = { exec(terminalInput) },
+                    onGo = { exec(terminalInput) },
+                    onDone = { exec(terminalInput) }
+                )
             )
-            IconButton(
-                onClick = {
-                    if (terminalInput.isNotBlank()) {
-                        val cmd = terminalInput.trim().lowercase()
-                        commandLogs.add("C:\\Windows\\System32>$terminalInput")
-                        when {
-                            cmd == "help" -> {
-                                commandLogs.add("Available commands:")
-                                commandLogs.add("  help      - Show this help menu")
-                                commandLogs.add("  dir       - List directory contents")
-                                commandLogs.add("  wine --version - Query active Wine engine")
-                                commandLogs.add("  winetricks     - Configure Windows DLLs")
-                                commandLogs.add("  systeminfo     - Display specs for Mali-G72")
-                                commandLogs.add("  clear     - Clear logs")
-                                commandLogs.add("  ps1 script.ps1 - Run PowerShell script")
-                            }
-                            cmd == "dir" -> {
-                                commandLogs.add(" Directory of C:\\Windows\\System32:")
-                                commandLogs.add("07/16/2026  10:24 AM    <DIR>          .")
-                                commandLogs.add("07/16/2026  10:24 AM    <DIR>          ..")
-                                commandLogs.add("07/16/2026  10:24 AM           820,112 kernel32.dll")
-                                commandLogs.add("07/16/2026  10:24 AM           640,992 user32.dll")
-                                commandLogs.add("07/16/2026  10:24 AM           310,240 gdi32.dll")
-                            }
-                            cmd.startsWith("ps1") -> {
-                                commandLogs.add("Execution Policy: Bypass...")
-                                commandLogs.add("Loading script module... SUCCESS.")
-                                commandLogs.add("Output: Rofwin PowerShell simulation active.")
-                            }
-                            cmd == "wine --version" -> {
-                                commandLogs.add("wine-8.0.2 (Rofwin Dynamic Build x86_64)")
-                            }
-                            cmd == "winetricks" -> {
-                                commandLogs.add("Winetricks loader:")
-                                commandLogs.add("Installing corefonts, d3dx9, d3dcompiler_47... SUCCESS.")
-                            }
-                            cmd == "systeminfo" -> {
-                                commandLogs.add("Host Device : Oppo CPH1823 (Oppo F9)")
-                                commandLogs.add("Processor   : MediaTek Helio P60 (MT6771)")
-                                commandLogs.add("GPU         : ARM Mali-G72 MP3")
-                                commandLogs.add("Sys Memory  : 4 GB LPDDR4X")
-                                commandLogs.add("Active Pres : ${container.box64Preset} mode")
-                            }
-                            cmd == "clear" -> {
-                                commandLogs.clear()
-                            }
-                            else -> {
-                                commandLogs.add("'$terminalInput' is not recognized as an internal command.")
-                            }
-                        }
-                        commandLogs.add("")
-                        onInputChange("")
-                    }
-                }
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Execute Command", tint = Color.Green)
+            IconButton(onClick = { exec(terminalInput) }) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Execute Command", tint = fgColor)
             }
         }
     }
@@ -1312,61 +1572,244 @@ fun SshManagerWindow() {
     }
 }
 @Composable
-fun Mt5Window() {
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2C))) {
-        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color.White)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("MetaTrader 5 - Demo Account (Connected)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+fun Mt5Window(lowRam: Boolean) {
+    val rnd = remember { java.util.Random() }
+    // Symbol mid-prices (feed simulasi lokal — BUKAN koneksi broker sungguhan)
+    val mids = remember {
+        mutableStateMapOf(
+            "EURUSD" to 1.09250, "GBPUSD" to 1.27510, "USDJPY" to 145.305,
+            "USDCHF" to 0.88120, "AUDUSD" to 0.66240, "XAUUSD" to 2385.40, "BTCUSD" to 97450.0
+        )
+    }
+    val prevMids = remember { mutableStateMapOf<String, Double>().apply { mids.forEach { (k, v) -> put(k, v) } } }
+    var chartSymbol by remember { mutableStateOf("EURUSD") }
+    var timeframe by remember { mutableStateOf("H1") }
+    val series = remember {
+        mutableStateListOf<Float>().apply {
+            var v = 50f
+            repeat(80) { add(v); v = (v + (rnd.nextFloat() - 0.48f) * 6f).coerceIn(5f, 95f) }
         }
-        Row(modifier = Modifier.weight(1f)) {
-            // Market Watch
-            Column(modifier = Modifier.width(150.dp).fillMaxHeight().border(1.dp, Color(0xFF333333)).padding(8.dp)) {
-                Text("Market Watch", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("EURUSD   1.0924   1.0925", color = Color.Green, fontSize = 10.sp)
-                Text("GBPUSD   1.2750   1.2752", color = Color.Green, fontSize = 10.sp)
-                Text("USDJPY   145.30   145.31", color = Color.Red, fontSize = 10.sp)
+    }
+    val trades = remember { mutableStateListOf<String>() }
+    var ticket by remember { mutableStateOf(53000100) }
+    var balance by remember { mutableFloatStateOf(10000f) }
+    var floatingPnl by remember { mutableFloatStateOf(0f) }
+    var pingMs by remember { mutableStateOf(41) }
+
+    fun digits(sym: String) = when (sym) {
+        "USDJPY" -> 3
+        "XAUUSD" -> 2
+        "BTCUSD" -> 1
+        else -> 5
+    }
+    fun fmt(sym: String, v: Double) = "%.${digits(sym)}f".format(v)
+    fun spread(sym: String) = when (sym) {
+        "USDJPY" -> 0.015; "XAUUSD" -> 0.35; "BTCUSD" -> 25.0; else -> 0.00015
+    }
+
+    // Live tick engine (lebih lambat & hemat saat Low-RAM Mode)
+    LaunchedEffect(lowRam) {
+        while (true) {
+            delay(if (lowRam) 2500L else 900L)
+            mids.keys.toList().forEach { s ->
+                val old = mids[s] ?: 1.0
+                prevMids[s] = old
+                val vol = if (s == "BTCUSD") 0.0012 else if (s == "XAUUSD") 0.0007 else 0.0004
+                mids[s] = (old * (1.0 + (rnd.nextFloat() - 0.5f) * 2f * vol.toFloat()))
             }
-            // Chart Area
-            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.Black), contentAlignment = Alignment.Center) {
-                Text("EURUSD, H1", color = Color.DarkGray, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                    // Draw a simple mock chart
-                    drawLine(Color.Green, androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width * 0.3f, size.height * 0.4f), strokeWidth = 2f)
-                    drawLine(Color.Red, androidx.compose.ui.geometry.Offset(size.width * 0.3f, size.height * 0.4f), androidx.compose.ui.geometry.Offset(size.width * 0.6f, size.height * 0.7f), strokeWidth = 2f)
-                    drawLine(Color.Green, androidx.compose.ui.geometry.Offset(size.width * 0.6f, size.height * 0.7f), androidx.compose.ui.geometry.Offset(size.width, size.height * 0.2f), strokeWidth = 2f)
+            val last = series.last()
+            series.removeAt(0)
+            series.add((last + (rnd.nextFloat() - 0.48f) * 5f).coerceIn(5f, 95f))
+            floatingPnl = ((rnd.nextFloat() - 0.45f) * 120f * trades.size.coerceAtLeast(1)) * if (trades.isEmpty()) 0f else 1f
+            pingMs = 30 + rnd.nextInt(60)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2C))) {
+        // Menu bar ala MT5 desktop
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            listOf("File", "View", "Insert", "Charts", "Tools", "Window", "Help").forEach {
+                Text(it, color = Color(0xFFBBBBBB), fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp))
+            }
+        }
+        // Toolbar: timeframe + simbol chart
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF242424)).padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf("M1", "M5", "M15", "H1", "H4", "D1").forEach { tf ->
+                Text(
+                    tf,
+                    color = if (tf == timeframe) Color(0xFF4CAF50) else Color(0xFF999999),
+                    fontSize = 10.sp,
+                    fontWeight = if (tf == timeframe) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier
+                        .clickable { timeframe = tf }
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text("Demo 12345678 — Rofwin-Demo Server", color = Color(0xFF88CC88), fontSize = 10.sp)
+        }
+
+        Row(modifier = Modifier.weight(1f)) {
+            // Market Watch (harga bergerak live)
+            Column(modifier = Modifier.width(140.dp).fillMaxHeight().border(1.dp, Color(0xFF333333)).padding(6.dp)) {
+                Text("Market Watch", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Symbol", color = Color.Gray, fontSize = 9.sp)
+                    Text("Bid / Ask", color = Color.Gray, fontSize = 9.sp)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LazyColumn {
+                    items(mids.keys.toList()) { s ->
+                        val mid = mids[s] ?: 1.0
+                        val up = mid >= (prevMids[s] ?: mid)
+                        val c = if (up) Color(0xFF4CAF50) else Color(0xFFEF5350)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { chartSymbol = s }
+                                .background(if (s == chartSymbol) Color(0xFF173A17) else Color.Transparent)
+                                .padding(vertical = 3.dp)
+                        ) {
+                            Text(s, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("${fmt(s, mid)}   ${fmt(s, mid + spread(s))}", color = c, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
+            }
+            // Chart Area (line chart live)
+            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.Black)) {
+                Canvas(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+                    val w = size.width; val h = size.height
+                    // grid horizontal
+                    for (i in 1..4) {
+                        drawLine(Color(0xFF1B1B1B), Offset(0f, h * i / 5f), Offset(w, h * i / 5f), strokeWidth = 1f)
+                    }
+                    val step = w / (series.size - 1)
+                    for (i in 0 until series.size - 1) {
+                        val y1 = h - (series[i] / 100f) * h
+                        val y2 = h - (series[i + 1] / 100f) * h
+                        drawLine(
+                            color = if (series[i + 1] >= series[i]) Color(0xFF4CAF50) else Color(0xFFEF5350),
+                            start = Offset(i * step, y1),
+                            end = Offset((i + 1) * step, y2),
+                            strokeWidth = 3f
+                        )
+                    }
+                }
+                Text(
+                    "$chartSymbol, $timeframe",
+                    color = Color.DarkGray,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                Text(
+                    "Bid ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}",
+                    color = Color(0xFF4CAF50),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                )
+                // Sell / Buy seperti panel one-click MT5
+                Row(modifier = Modifier.align(Alignment.TopStart).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = {
+                            trades.add("#${ticket++} sell 0.01 $chartSymbol @ ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}")
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E2424)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) { Text("Sell ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}", fontSize = 9.sp) }
+                    Button(
+                        onClick = {
+                            trades.add("#${ticket++} buy 0.01 $chartSymbol @ ${fmt(chartSymbol, (mids[chartSymbol] ?: 1.0) + spread(chartSymbol))}")
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E5AA8)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) { Text("Buy ${fmt(chartSymbol, (mids[chartSymbol] ?: 1.0) + spread(chartSymbol))}", fontSize = 9.sp) }
                 }
             }
         }
-        // Terminal / Toolbox
-        Column(modifier = Modifier.fillMaxWidth().height(100.dp).border(1.dp, Color(0xFF333333)).padding(8.dp)) {
-            Text("Toolbox - Trade | Exposure | History | News", color = Color.LightGray, fontSize = 11.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Balance: 10000.00 USD  Equity: 10050.00 USD  Margin: 50.00", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+        // Toolbox
+        Column(modifier = Modifier.fillMaxWidth().height(110.dp).border(1.dp, Color(0xFF333333)).padding(6.dp)) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                listOf("Trade", "Exposure", "History", "News", "Mailbox").forEach {
+                    Text(it, color = if (it == "Trade") Color.White else Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 6.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                if (trades.isEmpty()) {
+                    item { Text("no open positions — ketuk Sell/Buy untuk order simulasi", color = Color.Gray, fontSize = 10.sp) }
+                } else {
+                    items(trades) { t -> Text(t, color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+                }
+            }
+            Text(
+                "Balance: ${"%.2f".format(balance)} USD   Equity: ${"%.2f".format(balance + floatingPnl)} USD   Free Margin: ${"%.2f".format(balance + floatingPnl - trades.size * 50f)}",
+                color = if (floatingPnl >= 0) Color(0xFF4CAF50) else Color(0xFFEF5350),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        // Status bar ala MT5
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Circle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(8.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Connected  |  $pingMs ms  |  Rofwin Wine DDE (feed simulasi lokal)", color = Color(0xFF999999), fontSize = 9.sp)
         }
     }
 }
 
 @Composable
 fun Mql5EditorWindow() {
-    var code by remember { mutableStateOf("//+------------------------------------------------------------------+\n//|                                                      Expert.mq5 |\n//|                                      Copyright 2026, MetaQuotes |\n//|                                             https://www.mql5.com |\n//+------------------------------------------------------------------+\n#property copyright \"Copyright 2026\"\n#property link      \"https://www.mql5.com\"\n#property version   \"1.00\"\n\n//+------------------------------------------------------------------+\n//| Expert initialization function                                   |\n//+------------------------------------------------------------------+\nint OnInit()\n  {\n   Print(\"Algo Editor Sync Activated!\");\n   return(INIT_SUCCEEDED);\n  }\n") }
-    var syncStatus by remember { mutableStateOf("Syncing with Algo Cloud...") }
-    LaunchedEffect(Unit) {
-        delay(2000)
-        syncStatus = "Algo Editor MQL5 Sync: Active & Connected"
+    var code by remember {
+        mutableStateOf("//+------------------------------------------------------------------+\n//|                                                      Expert.mq5 |\n//|                                      Copyright 2026, MetaQuotes |\n//|                                             https://www.mql5.com |\n//+------------------------------------------------------------------+\n#property copyright \"Copyright 2026\"\n#property link      \"https://www.mql5.com\"\n#property version   \"1.00\"\n\n//+------------------------------------------------------------------+\n//| Expert initialization function                                   |\n//+------------------------------------------------------------------+\nint OnInit()\n  {\n   Print(\"Algo Editor Sync Activated!\");\n   return(INIT_SUCCEEDED);\n  }\n\n//+------------------------------------------------------------------+\n//| Expert tick function                                             |\n//+------------------------------------------------------------------+\nvoid OnTick()\n  {\n   // strategy here\n  }\n")
+    }
+    val outputLogs = remember { mutableStateListOf<String>() }
+    var compiling by remember { mutableStateOf(false) }
+    var syncStatus by remember { mutableStateOf("Algo Editor MQL5 Sync: Active & Connected") }
+    val scope = rememberCoroutineScope()
+
+    fun compile() {
+        if (compiling) return
+        compiling = true
+        outputLogs.add("Compiling 'Expert.mq5'...")
+        scope.launch {
+            delay(900)
+            // Pemeriksaan sederhana: kurung kurawal tak seimbang => error ala compiler
+            val openB = code.count { it == '{' }
+            val closeB = code.count { it == '}' }
+            if (openB != closeB) {
+                outputLogs.add("'{' - unbalanced parentheses   Expert.mq5   line ${code.lines().size}   (1 error, 0 warnings)")
+            } else {
+                val kb = (code.toByteArray().size / 3 + 1024)
+                outputLogs.add("0 errors, 0 warnings, $kb bytes code generated")
+                outputLogs.add("Expert.ex5 written to C:\\MQL5\\Experts\\")
+            }
+            compiling = false
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) {
-        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF2C2C2C)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Code, contentDescription = null, tint = Color.LightGray)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("MetaEditor - Expert.mq5", color = Color.White, fontSize = 12.sp)
+        // Toolbar ala MetaEditor
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF2C2C2C)).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Code, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("MetaEditor — Expert.mq5", color = Color.White, fontSize = 12.sp)
             Spacer(modifier = Modifier.weight(1f))
-            Button(onClick = { /* compile mock */ }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(0.dp)) {
-                Text("Compile", fontSize = 10.sp)
+            Button(onClick = { compile() }, modifier = Modifier.height(26.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)) {
+                Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(if (compiling) "Compiling..." else "Compile (F7)", fontSize = 10.sp)
             }
         }
+        // Editor
         TextField(
             value = code,
             onValueChange = { code = it },
@@ -1381,11 +1824,32 @@ fun Mql5EditorWindow() {
             ),
             textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp)
         )
+        // Output panel (Errors / Warnings) ala MetaEditor
+        Column(modifier = Modifier.fillMaxWidth().height(72.dp).background(Color(0xFF252526)).padding(6.dp)) {
+            Text("Errors  |  Warnings  |  Find", color = Color.Gray, fontSize = 9.sp)
+            LazyColumn {
+                if (outputLogs.isEmpty()) {
+                    item { Text("Tekan Compile (F7) untuk membangun EA...", color = Color.DarkGray, fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+                } else {
+                    items(outputLogs) { line ->
+                        Text(
+                            line,
+                            color = if (line.contains("error", ignoreCase = true) && !line.startsWith("0 errors")) Color(0xFFEF5350) else Color(0xFF4CAF50),
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+        // Status bar
         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF007ACC)).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.CloudSync, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text(syncStatus, color = Color.White, fontSize = 10.sp)
             Spacer(modifier = Modifier.weight(1f))
+            Text("Ln ${code.lines().size}", color = Color.White, fontSize = 10.sp)
+            Spacer(modifier = Modifier.width(8.dp))
             Text("UTF-8", color = Color.White, fontSize = 10.sp)
             Spacer(modifier = Modifier.width(8.dp))
             Text("MQL5", color = Color.White, fontSize = 10.sp)
@@ -1397,14 +1861,29 @@ fun BrowserWindow() {
     var url by remember { mutableStateOf("https://www.google.com") }
     var urlInput by remember { mutableStateOf(url) }
     var webView by remember { mutableStateOf<WebView?>(null) }
-    
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().background(DarkSurface).padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Language, contentDescription = null, tint = Color.White)
-            Spacer(modifier = Modifier.width(8.dp))
+            // Navigasi ala Chrome: kembali / maju / beranda
+            IconButton(onClick = { if (webView?.canGoBack() == true) webView?.goBack() }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = Color.White)
+            }
+            IconButton(onClick = { if (webView?.canGoForward() == true) webView?.goForward() }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.ArrowForward, contentDescription = "Maju", tint = Color.White)
+            }
+            IconButton(
+                onClick = {
+                    url = "https://www.google.com"
+                    urlInput = url
+                    webView?.loadUrl(url)
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(Icons.Default.Home, contentDescription = "Beranda", tint = Color.White)
+            }
             TextField(
                 value = urlInput,
                 onValueChange = { urlInput = it },
@@ -1413,17 +1892,18 @@ fun BrowserWindow() {
                 textStyle = TextStyle(fontSize = 11.sp, color = Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
-                    var loadUrl = urlInput
+                    var loadUrl = urlInput.trim()
                     if (!loadUrl.startsWith("http://") && !loadUrl.startsWith("https://")) {
-                        loadUrl = "https://$loadUrl"
+                        loadUrl = if (loadUrl.contains(".")) "https://$loadUrl" else "https://www.google.com/search?q=" + java.net.URLEncoder.encode(loadUrl, "UTF-8")
                     }
                     url = loadUrl
+                    urlInput = loadUrl
                     webView?.loadUrl(url)
                 }),
                 singleLine = true
             )
             IconButton(onClick = { webView?.reload() }) {
-                Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White)
+                Icon(Icons.Default.Refresh, contentDescription = "Muat ulang", tint = Color.White)
             }
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White)) {
@@ -1434,12 +1914,14 @@ fun BrowserWindow() {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.setSupportZoom(true)
+                        settings.builtInZoomControls = true
+                        settings.displayZoomControls = false
                         loadUrl(url)
                         webView = this
                     }
                 },
                 update = {
-                    // Update happens through the go button/keyboard action
+                    // Navigasi via ongmn action/keyboard/Go button
                 }
             )
         }
