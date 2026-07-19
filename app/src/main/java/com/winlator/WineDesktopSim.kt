@@ -56,11 +56,81 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
+
+// ===== Windows 11 design tokens (Rofwin 1.4.0) =====
+val Win11Accent = Color(0xFF4CC2FF)
+val Win11AccentSolid = Color(0xFF0078D4)
+val Win11Taskbar = Color(0xE6202020)
+val Win11Card = Color(0xF5282828)
+val Win11Stroke = Color(0x33FFFFFF)
+
+data class StartApp(val title: String, val icon: ImageVector, val window: DesktopWindow)
+
+// Naik satu folder (generik — bekerja untuk folder buatan baru juga)
+fun parentPath(p: String): String {
+    val t = p.trimEnd('\\')
+    if (t.length <= 3) return p
+    val parent = t.substringBeforeLast('\\', t)
+    return if (parent.endsWith(':')) "$parent\\" else parent
+}
+
+// Evaluator aritmetika sederhana untuk Python Shell ( + - * / ( ) dan desimal )
+private class PyParser(private val expr: String) {
+    private var idx = 0
+    private fun ws() { while (idx < expr.length && expr[idx] == ' ') idx++ }
+    private fun parseFactor(): Double? {
+        ws()
+        if (expr.getOrNull(idx) == '-') { idx++; return -(parseFactor() ?: return null) }
+        if (expr.getOrNull(idx) == '(') {
+            idx++
+            val v = parseExpr() ?: return null
+            ws()
+            if (expr.getOrNull(idx) != ')') return null
+            idx++
+            return v
+        }
+        val start = idx
+        while (idx < expr.length && (expr[idx].isDigit() || expr[idx] == '.')) idx++
+        if (start == idx) return null
+        return expr.substring(start, idx).toDoubleOrNull()
+    }
+    private fun parseTerm(): Double? {
+        var v = parseFactor() ?: return null
+        while (true) {
+            ws()
+            when (expr.getOrNull(idx)) {
+                '*' -> { idx++; v *= parseFactor() ?: return null }
+                '/' -> { idx++; v /= parseFactor() ?: return null }
+                else -> return v
+            }
+        }
+    }
+    private fun parseExpr(): Double? {
+        var v = parseTerm() ?: return null
+        while (true) {
+            ws()
+            when (expr.getOrNull(idx)) {
+                '+' -> { idx++; v += parseTerm() ?: return null }
+                '-' -> { idx++; v -= parseTerm() ?: return null }
+                else -> return v
+            }
+        }
+    }
+    fun parse(): Double? {
+        if (expr.isBlank()) return null
+        val v = parseExpr() ?: return null
+        ws()
+        return if (idx == expr.length) v else null
+    }
+}
+
+fun evalPy(expr: String): Double? = PyParser(expr).parse()
 
 // Window Type
 enum class DesktopWindow {
@@ -101,6 +171,19 @@ fun WineDesktopSim(
         openWindow = w
         isMaximized = false
         isFullscreen = false
+    }
+
+    // Windows 11 panels (widgets / quick settings / notifikasi / power) + jam hidup
+    var widgetsOpen by remember { mutableStateOf(false) }
+    var qsOpen by remember { mutableStateOf(false) }
+    var notifOpen by remember { mutableStateOf(false) }
+    var powerOpen by remember { mutableStateOf(false) }
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            delay(1000)
+        }
     }
 
     // File Explorer State
@@ -213,13 +296,16 @@ fun WineDesktopSim(
     }
     var terminalInput by remember { mutableStateOf("") }
 
-    // Booting sequence
-    LaunchedEffect(Unit) {
-        while (bootProgress < 1f) {
-            delay(100)
-            bootProgress += 0.05f
+    // Booting sequence (bisa di-Restart ulang dari Start Menu → Restart)
+    LaunchedEffect(isBooting) {
+        if (isBooting) {
+            bootProgress = 0f
+            while (bootProgress < 1f) {
+                delay(90)
+                bootProgress += 0.05f
+            }
+            isBooting = false
         }
-        isBooting = false
     }
 
     // simulated real-time stats (FPS, Temps)
@@ -244,15 +330,14 @@ fun WineDesktopSim(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "ROFWIN EMULATOR",
+                    text = "Rofwin",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontWeight = FontWeight.Bold
                     )
                 )
                 Text(
-                    text = "Optimized for Helio P60 (Mali-G72)",
+                    text = "Windows 11 Edition — Build 26200.rofwin",
                     style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
@@ -266,7 +351,7 @@ fun WineDesktopSim(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Initialising Wine + Box64 Dynarec... ${(bootProgress * 100).toInt()}%",
+                    text = "Menyiapkan layanan... ${(bootProgress * 100).toInt()}%",
                     style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary)
                 )
             }
@@ -285,13 +370,32 @@ fun WineDesktopSim(
                     )
                 )
         ) {
-            // Wallpaper dinonaktifkan pada Low-RAM Mode (hemat decode bitmap besar di RAM 4GB)
-            if (!lowRamMode) {
-                Image(
-                    painter = painterResource(id = R.drawable.rofwin_background_1784258475774),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+            // ===== Latar "Bloom" ala Windows 11 (gradient vektor — ringan, tanpa bitmap) =====
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawRect(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF0A2E63), Color(0xFF071B3F), Color(0xFF030B1C))
+                    )
+                )
+                // Cahaya biru kanan-atas
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0x553B82F6), Color(0x003B82F6)),
+                        center = Offset(size.width * 0.75f, size.height * 0.30f),
+                        radius = size.minDimension * 0.9f
+                    ),
+                    radius = size.minDimension * 0.9f,
+                    center = Offset(size.width * 0.75f, size.height * 0.30f)
+                )
+                // Cahaya ungu kiri-bawah
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0x408B5CF6), Color(0x008B5CF6)),
+                        center = Offset(size.width * 0.15f, size.height * 0.85f),
+                        radius = size.minDimension * 0.8f
+                    ),
+                    radius = size.minDimension * 0.8f,
+                    center = Offset(size.width * 0.15f, size.height * 0.85f)
                 )
             }
 
@@ -405,32 +509,35 @@ fun WineDesktopSim(
                 }
             }
 
-            // Interactive Windows (Windows-style 1.3.0: drag / maximize / fullscreen / minimize)
+            // Interactive Windows (Windows 11: rounded corners, shadow, caption buttons)
             if (openWindow != DesktopWindow.NONE) {
+                val winShape = if (isMaximized || isFullscreen) RoundedCornerShape(0.dp) else RoundedCornerShape(8.dp)
                 val windowModifier = when {
                     isFullscreen -> Modifier
                         .fillMaxSize()
                         .zIndex(3f)
-                        .background(DarkSurface)
+                        .background(Color(0xFF202020))
                     isMaximized -> Modifier
                         .fillMaxSize()
                         .padding(bottom = 48.dp)
                         .zIndex(2f)
-                        .background(DarkSurface)
+                        .background(Color(0xFF202020))
                     else -> Modifier
                         .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
                         .width(420.dp)
                         .height(350.dp)
-                        .background(DarkSurface, RoundedCornerShape(8.dp))
-                        .border(1.dp, PrimarySky, RoundedCornerShape(8.dp))
+                        .shadow(24.dp, winShape, ambientColor = Color.Black, spotColor = Color.Black)
+                        .clip(winShape)
+                        .background(Color(0xFF202020))
+                        .border(0.5.dp, Win11Stroke, winShape)
                 }
                 Box(modifier = windowModifier) {
                     Column {
-                        // Title bar
+                        // Title bar (Windows 11 — gelap, caption buttons putih)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(PrimarySky)
+                                .background(Color(0xFF2B2B2B))
                                 .pointerInput(isMaximized, isFullscreen) {
                                     detectDragGestures { change, dragAmount ->
                                         change.consume()
@@ -447,20 +554,21 @@ fun WineDesktopSim(
                                 Icon(
                                     imageVector = getWindowIcon(openWindow),
                                     contentDescription = null,
-                                    tint = Color.Black,
+                                    tint = Win11Accent,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = getWindowTitle(openWindow),
                                     style = MaterialTheme.typography.titleSmall.copy(
-                                        color = Color.Black,
-                                        fontWeight = FontWeight.Bold
+                                        color = Color(0xFFE8E8E8),
+                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 13.sp
                                     )
                                 )
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // [—] Minimize ke taskbar
+                                // [—] Minimize
                                 IconButton(
                                     onClick = {
                                         minimizedWindows.add(openWindow)
@@ -468,11 +576,11 @@ fun WineDesktopSim(
                                         isMaximized = false
                                         isFullscreen = false
                                     },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(30.dp)
                                 ) {
-                                    Icon(Icons.Default.Minimize, contentDescription = "Minimize", tint = Color.Black)
+                                    Icon(Icons.Default.Minimize, contentDescription = "Minimize", tint = Color(0xFFE8E8E8), modifier = Modifier.size(18.dp))
                                 }
-                                // [□] Maximize / Restore (ala Windows, taskbar tetap terlihat)
+                                // [□] Maximize / Restore (kotak gaya Windows 11)
                                 IconButton(
                                     onClick = {
                                         if (isFullscreen) {
@@ -482,26 +590,28 @@ fun WineDesktopSim(
                                             isMaximized = !isMaximized
                                         }
                                     },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(30.dp)
                                 ) {
                                     Icon(
-                                        imageVector = if (isMaximized || isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                        imageVector = if (isMaximized || isFullscreen) Icons.Default.FilterNone else Icons.Default.CropSquare,
                                         contentDescription = if (isMaximized || isFullscreen) "Restore Down" else "Maximize",
-                                        tint = Color.Black
+                                        tint = Color(0xFFE8E8E8),
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
-                                // [⛶] Full Screen sejati (menutupi taskbar — gaya F11 Chrome)
+                                // [⛶] Full Screen sejati (F11 — menutupi taskbar)
                                 IconButton(
                                     onClick = {
                                         isFullscreen = !isFullscreen
                                         if (isFullscreen) isMaximized = false
                                     },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(30.dp)
                                 ) {
                                     Icon(
                                         imageVector = if (isFullscreen) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
-                                        contentDescription = if (isFullscreen) "Exit Full Screen" else "Full Screen",
-                                        tint = if (isFullscreen) Color(0xFF6A1B9A) else Color.Black
+                                        contentDescription = if (isFullscreen) "Exit Full Screen" else "Full Screen (F11)",
+                                        tint = if (isFullscreen) Win11Accent else Color(0xFFE8E8E8),
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                                 // [✕] Close
@@ -511,9 +621,9 @@ fun WineDesktopSim(
                                         isMaximized = false
                                         isFullscreen = false
                                     },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(30.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Black)
+                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFFE8E8E8), modifier = Modifier.size(18.dp))
                                 }
                             }
                         }
@@ -522,7 +632,7 @@ fun WineDesktopSim(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(DarkBackground)
+                                .background(Color(0xFF1F1F1F))
                         ) {
                             when (openWindow) {
                                 DesktopWindow.MY_COMPUTER -> {
@@ -538,21 +648,37 @@ fun WineDesktopSim(
                                         ) {
                                             IconButton(
                                                 onClick = {
-                                                    if (currentPath == "C:\\Windows\\System32") currentPath = "C:\\Windows"
-                                                    else if (currentPath == "C:\\Windows") currentPath = "C:\\"
-                                                    else if (currentPath == "D:\\Games") currentPath = "D:\\"
-                                                    else if (currentPath == "C:\\Program Files\\DirectX" || currentPath == "C:\\Program Files\\WineD3D") currentPath = "C:\\Program Files"
-                                                    else if (currentPath == "C:\\Program Files" || currentPath == "C:\\users") currentPath = "C:\\"
-                                                    else if (currentPath == "C:\\users\\Administrator") currentPath = "C:\\users"
+                                                    currentPath = parentPath(currentPath)
                                                 },
-                                                enabled = currentPath != "C:\\" && currentPath != "D:\\" && currentPath != "E:\\" && currentPath != "Z:\\"
+                                                enabled = currentPath.trimEnd('\\').length > 2
                                             ) {
-                                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                                Icon(Icons.Default.ArrowUpward, contentDescription = "Up", tint = Color.White)
                                             }
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = currentPath,
-                                                style = MaterialTheme.typography.labelMedium.copy(color = Color.White),
+                                            // Address bar bisa diketik — Enter untuk navigasi
+                                            var pathInput by remember(currentPath) { mutableStateOf(currentPath) }
+                                            BasicTextField(
+                                                value = pathInput,
+                                                onValueChange = { pathInput = it },
+                                                singleLine = true,
+                                                textStyle = TextStyle(fontSize = 12.sp, color = Color.White, fontFamily = FontFamily.Monospace),
+                                                cursorBrush = SolidColor(Win11Accent),
+                                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                                keyboardActions = KeyboardActions(onGo = {
+                                                    var t = pathInput.trim().replace('/', '\\')
+                                                    if (t.length >= 2 && t[1] == ':' && !t.endsWith('\\') && simulatedFiles.containsKey(t)) {
+                                                        // path folder valid tanpa backslash akhir
+                                                    } else if (t.endsWith('\\') && simulatedFiles.containsKey(t)) {
+                                                        // root valid
+                                                    } else if (simulatedFiles.containsKey(t)) {
+                                                        // ok
+                                                    }
+                                                    if (simulatedFiles.containsKey(t)) {
+                                                        currentPath = t
+                                                    } else {
+                                                        pathInput = currentPath
+                                                    }
+                                                }),
                                                 modifier = Modifier
                                                     .weight(1f)
                                                     .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
@@ -594,6 +720,12 @@ fun WineDesktopSim(
                                                         val list = simulatedFiles[currentPath]?.toMutableList() ?: mutableListOf()
                                                         list.add(SimFile(newFileName, fileTypeFolder, if (fileTypeFolder) "Folder" else "1 KB"))
                                                         simulatedFiles[currentPath] = list
+                                                        if (fileTypeFolder) {
+                                                            // Folder baru dapat dinavigasi (Explorer + cd di Terminal)
+                                                            val newPath = currentPath.trimEnd('\\') + "\\" + newFileName
+                                                            simulatedFiles[newPath] = emptyList()
+                                                            simulatedFiles[newPath + "\\"] = emptyList()
+                                                        }
                                                         newFileName = ""
                                                     }
                                                 },
@@ -674,7 +806,14 @@ fun WineDesktopSim(
                                                         .fillMaxWidth()
                                                         .clickable {
                                                             if (file.isDirectory) {
-                                                                currentPath = if (currentPath.endsWith("\\")) "$currentPath${file.name}" else "$currentPath\\${file.name}"
+                                                                val newPath = currentPath.trimEnd('\\') + "\\" + file.name
+                                                                if (simulatedFiles.containsKey(newPath)) {
+                                                                    currentPath = newPath
+                                                                } else {
+                                                                    // Daftarkan folder belum dikenal agar bisa dinavigasi
+                                                                    simulatedFiles[newPath] = emptyList()
+                                                                    currentPath = newPath
+                                                                }
                                                             }
                                                         }
                                                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -717,11 +856,23 @@ fun WineDesktopSim(
                                             "Registry Editor (regedit.exe)",
                                             style = MaterialTheme.typography.titleSmall.copy(color = SecondaryTeal)
                                         )
-                                        Text(
-                                            "Tuning keys for Direct3D Rendering on Mali-G72:",
-                                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
-                                            modifier = Modifier.padding(bottom = 8.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                "Tuning keys for Direct3D Rendering on Mali-G72:",
+                                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            TextButton(onClick = {
+                                                val n = registryKeys.size + 1
+                                                registryKeys.add(Pair("HKCU\\Software\\Wine\\Custom\\NewKey$n", "0x00000000 (0)"))
+                                            }) {
+                                                Text("＋ New", fontSize = 11.sp)
+                                            }
+                                        }
 
                                         LazyColumn(modifier = Modifier.weight(1f).border(1.dp, Color.Gray).background(DarkSurface)) {
                                             items(registryKeys) { key ->
@@ -739,7 +890,10 @@ fun WineDesktopSim(
                                                         Text(key.first.substringAfterLast("\\"), fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                                         Text(key.first, fontSize = 9.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                                     }
-                                                    Text(key.second, fontSize = 11.sp, color = PrimarySky, modifier = Modifier.weight(0.4f), textAlign = TextAlign.End)
+                                                    Text(key.second, fontSize = 11.sp, color = Win11Accent, modifier = Modifier.weight(0.4f), textAlign = TextAlign.End)
+                                                    IconButton(onClick = { registryKeys.remove(key) }, modifier = Modifier.size(20.dp)) {
+                                                        Icon(Icons.Default.Delete, contentDescription = "Delete key", tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(13.dp))
+                                                    }
                                                 }
                                             }
                                         }
@@ -781,14 +935,48 @@ fun WineDesktopSim(
                                     }
                                 }
                                 DesktopWindow.TASK_MANAGER -> {
-                                    // Task Manager Sim
+                                    // Task Manager — CPU/RAM hidup, End Process mengurangi beban, Run new task
+                                    var cpuPct by remember { mutableStateOf(23) }
+                                    var memPct by remember { mutableStateOf(48) }
+                                    LaunchedEffect(Unit) {
+                                        while (true) {
+                                            delay(1600)
+                                            cpuPct = (cpuPct + (-7..7).random()).coerceAtLeast(3).coerceAtMost(97)
+                                            memPct = (35 + processes.size * 9 + (-3..3).random()).coerceAtLeast(20).coerceAtMost(95)
+                                        }
+                                    }
                                     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
                                         Row(
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text("Wine Task Manager", style = MaterialTheme.typography.titleSmall.copy(color = PrimarySky))
-                                            Text("Mali-G72 GPU: ${"12%"}", style = MaterialTheme.typography.labelSmall.copy(color = SecondaryTeal))
+                                            Text("Task Manager", style = MaterialTheme.typography.titleSmall.copy(color = Win11Accent))
+                                            TextButton(onClick = { openWin(DesktopWindow.COMMAND_PROMPT) }) {
+                                                Text("▶ Run new task", fontSize = 11.sp)
+                                            }
+                                        }
+                                        // CPU & Memory bars (hidup)
+                                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("CPU  $cpuPct%", fontSize = 10.sp, color = Color(0xFFD0D0D0))
+                                                LinearProgressIndicator(
+                                                    progress = cpuPct / 100f,
+                                                    color = Win11Accent,
+                                                    trackColor = Color(0xFF333333),
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("RAM  $memPct% (4GB)", fontSize = 10.sp, color = Color(0xFFD0D0D0))
+                                                LinearProgressIndicator(
+                                                    progress = memPct / 100f,
+                                                    color = SecondaryTeal,
+                                                    trackColor = Color(0xFF333333),
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                                                )
+                                            }
                                         }
 
                                         LazyColumn(modifier = Modifier.weight(1f).border(1.dp, Color.Gray)) {
@@ -826,11 +1014,12 @@ fun WineDesktopSim(
                                         commandLogs = commandLogs,
                                         terminalInput = terminalInput,
                                         onInputChange = { terminalInput = it },
-                                        onLaunch = { w -> openWin(w) }
+                                        onLaunch = { w -> openWin(w) },
+                                        simulatedFiles = simulatedFiles
                                     )
                                 }
                                 DesktopWindow.WINRAR -> {
-                                    WinRarWindow()
+                                    WinRarWindow(simulatedFiles)
                                 }
                                 DesktopWindow.PYTHON_SHELL -> {
                                     PythonShellWindow()
@@ -884,55 +1073,65 @@ fun WineDesktopSim(
                 }
             }
 
-            // Bottom Taskbar (Retro Styling but Dark Slate Theme)
+            // ===== Windows 11 Taskbar (terpusat) =====
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .background(Color(0xFF0F172A))
+                    .background(Win11Taskbar)
                     .align(Alignment.BottomCenter)
-                    .border(1.dp, Color(0xFF334155)),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .border(width = (0.5).dp, color = Win11Stroke),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Start button
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .clickable { startMenuOpen = !startMenuOpen }
-                        .background(if (startMenuOpen) PrimarySky else Color(0xFF1E293B))
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Laptop,
-                        contentDescription = "Start",
-                        tint = if (startMenuOpen) Color.Black else Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "START",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = if (startMenuOpen) Color.Black else Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
+                // Kiri: Widgets (cuaca + berita)
+                IconButton(onClick = {
+                    widgetsOpen = !widgetsOpen
+                    qsOpen = false; notifOpen = false; startMenuOpen = false
+                }) {
+                    Icon(Icons.Default.WbSunny, contentDescription = "Widgets", tint = Color(0xFF6EB5FF), modifier = Modifier.size(20.dp))
                 }
 
-                // Center active taskbar icon
+                // Tengah: Start + pinned + aplikasi berjalan (dengan indikator garis bawah)
                 Row(
-                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val activeWindows = listOfNotNull(openWindow.takeIf { it != DesktopWindow.NONE }) + minimizedWindows
-                    activeWindows.distinct().forEach { win ->
-                        Box(
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                startMenuOpen = !startMenuOpen
+                                widgetsOpen = false; qsOpen = false; notifOpen = false
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Win11Logo(Modifier.size(20.dp))
+                    }
+                    Spacer(modifier = Modifier.width(2.dp))
+                    val pinned = listOf(
+                        DesktopWindow.MY_COMPUTER,
+                        DesktopWindow.BROWSER,
+                        DesktopWindow.COMMAND_PROMPT,
+                        DesktopWindow.MT5,
+                        DesktopWindow.MQL5_EDITOR,
+                        DesktopWindow.TASK_MANAGER
+                    )
+                    val running = listOfNotNull(openWindow.takeIf { it != DesktopWindow.NONE }) + minimizedWindows
+                    val taskItems = (pinned + running).distinct()
+                    taskItems.forEach { win ->
+                        val isOpen = win == openWindow
+                        val isRunning = running.contains(win)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                             modifier = Modifier
-                                .background(if (win == openWindow) PrimarySky.copy(alpha = 0.2f) else Color(0x1AFFFFFF), RoundedCornerShape(4.dp))
-                                .border(1.dp, if (win == openWindow) PrimarySky else Color.Gray, RoundedCornerShape(4.dp))
+                                .width(42.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(4.dp))
                                 .clickable {
-                                    if (win == openWindow) {
+                                    if (isOpen) {
                                         minimizedWindows.add(win)
                                         openWindow = DesktopWindow.NONE
                                         isMaximized = false
@@ -942,144 +1141,413 @@ fun WineDesktopSim(
                                         openWin(win)
                                     }
                                 }
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(getWindowIcon(win), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(getWindowTitle(win).take(15), color = Color.White, fontSize = 11.sp)
-                            }
+                            Icon(
+                                getWindowIcon(win),
+                                contentDescription = getWindowTitle(win),
+                                tint = if (isOpen) Win11Accent else Color(0xFFE8E8E8),
+                                modifier = Modifier.size(21.dp)
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Box(
+                                modifier = Modifier
+                                    .padding(bottom = 3.dp)
+                                    .width(if (isOpen) 14.dp else if (isRunning) 6.dp else 0.dp)
+                                    .height(3.dp)
+                                    .background(
+                                        if (isOpen || isRunning) Win11Accent else Color.Transparent,
+                                        RoundedCornerShape(2.dp)
+                                    )
+                            )
                         }
                     }
                 }
 
-                // Right panel clock, specs and close emulator
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                ) {
-                    // Volume Control (New)
-                    var showVolume by remember { mutableStateOf(false) }
-                    var volumeLevel by remember { mutableFloatStateOf(0.7f) }
-                    
-                    Box {
-                        Icon(
-                            imageVector = if (volumeLevel > 0) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                            contentDescription = "Volume",
-                            tint = Color.LightGray,
-                            modifier = Modifier.size(20.dp).clickable { showVolume = !showVolume }
+                // Kanan: chevron, Quick Settings, jam hidup, notifikasi (gaya Windows 11)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Show hidden icons", tint = Color(0xFFB0B0B0), modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                qsOpen = !qsOpen
+                                widgetsOpen = false; notifOpen = false; startMenuOpen = false
+                            }
+                            .padding(horizontal = 5.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Wifi, contentDescription = "Wi-Fi", tint = Color(0xFFE8E8E8), modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.VolumeUp, contentDescription = "Volume", tint = Color(0xFFE8E8E8), modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.BatteryStd, contentDescription = "Battery", tint = Color(0xFFE8E8E8), modifier = Modifier.size(14.dp))
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nowMs)),
+                            color = Color(0xFFE8E8E8), fontSize = 11.sp
                         )
-                        
-                        if (showVolume) {
-                            Card(
-                                modifier = Modifier.align(Alignment.BottomEnd).offset(y = (-50).dp).width(40.dp).height(150.dp),
-                                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        Text(
+                            SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date(nowMs)),
+                            color = Color(0xFFB0B0B0), fontSize = 9.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                notifOpen = !notifOpen
+                                qsOpen = false; widgetsOpen = false; startMenuOpen = false
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Notifikasi", tint = Color(0xFFE8E8E8), modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+            }
+
+            // Overlay penutup panel-panel (klik di luar)
+            if (widgetsOpen || qsOpen || notifOpen || startMenuOpen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(4f)
+                        .clickable {
+                            widgetsOpen = false; qsOpen = false; notifOpen = false; startMenuOpen = false; powerOpen = false
+                        }
+                )
+            }
+
+            // ===== Widgets (gaya Windows 11) =====
+            if (widgetsOpen) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(y = (-52).dp)
+                        .zIndex(6f)
+                        .width(250.dp)
+                        .background(Win11Card, RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text("Widgets", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.WbSunny, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(36.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text("29° Cerah sebagian", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Jambi City, ID · diperbarui baru saja", color = Color(0xFFB0B0B0), fontSize = 10.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    listOf(
+                        "Rofwin 1.4.0: Windows 11 experience mendarat",
+                        "MT5 sim: 7 pair feed lokal berjalan",
+                        "Tip: aktifkan Low-RAM via Quick Settings"
+                    ).forEach { n ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Campaign, contentDescription = null, tint = Win11Accent, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(n, color = Color(0xFFE0E0E0), fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+            // ===== Quick Settings — slider volume & brightness NYATA (mengubah HP) =====
+            if (qsOpen) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(y = (-52).dp)
+                        .zIndex(6f)
+                        .width(260.dp)
+                        .background(Win11Card, RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        QsTile(icon = Icons.Default.Wifi, label = "Wi-Fi", on = true, modifier = Modifier.weight(1f)) {}
+                        QsTile(icon = Icons.Default.Bluetooth, label = "Bluetooth", on = false, modifier = Modifier.weight(1f)) {}
+                        QsTile(icon = Icons.Default.Memory, label = "Low-RAM", on = lowRamMode, modifier = Modifier.weight(1f)) {
+                            lowRamMode = !lowRamMode
+                            prefs.edit().putBoolean("low_ram", lowRamMode).apply()
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // Volume NYATA — mengubah volume media Android
+                    val audioManager = remember { context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
+                    var vol by remember { mutableFloatStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).toFloat()) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Slider(
+                            value = vol,
+                            onValueChange = { v ->
+                                vol = v
+                                val max = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                                audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (v * max).toInt().coerceIn(0, max), 0)
+                            },
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                        )
+                    }
+                    // Brightness NYATA — mengubah kecerahan layar aplikasi
+                    val activity = context as? android.app.Activity
+                    var bri by remember { mutableFloatStateOf(activity?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.8f) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.LightMode, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Slider(
+                            value = bri,
+                            onValueChange = { v ->
+                                bri = v
+                                activity?.window?.let { w ->
+                                    val lp = w.attributes
+                                    lp.screenBrightness = v.coerceIn(0.05f, 1f)
+                                    w.attributes = lp
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                        )
+                    }
+                }
+            }
+
+            // ===== Notification Center =====
+            if (notifOpen) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(y = (-52).dp)
+                        .zIndex(6f)
+                        .width(260.dp)
+                        .background(Win11Card, RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text("Notifications", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    listOf(
+                        Triple("Rofwin", "Windows 11 UI aktif di container ini", "baru saja"),
+                        Triple("MetaTrader 5 (sim)", "Feed lokal 7 pair berjalan", "1 menit"),
+                        Triple("Terminal", "Ketik 'help' — 30+ perintah hidup", "5 menit")
+                    ).forEach { (app, msg, time) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 5.dp)
+                        ) {
+                            Icon(Icons.Default.Notifications, contentDescription = null, tint = Win11Accent, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(app, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(msg, color = Color(0xFFD0D0D0), fontSize = 11.sp)
+                            }
+                            Text(time, color = Color(0xFF808080), fontSize = 9.sp)
+                        }
+                    }
+                    TextButton(onClick = { notifOpen = false }, modifier = Modifier.align(Alignment.End)) {
+                        Text("Clear all", fontSize = 11.sp)
+                    }
+                }
+            }
+
+            // ===== Start Menu Windows 11 (search hidup, pinned grid, power) =====
+            if (startMenuOpen && !isFullscreen) {
+                val startApps = listOf(
+                    StartApp("File Explorer", Icons.Default.Folder, DesktopWindow.MY_COMPUTER),
+                    StartApp("Google Chrome", Icons.Default.Language, DesktopWindow.BROWSER),
+                    StartApp("Terminal", Icons.Default.Terminal, DesktopWindow.COMMAND_PROMPT),
+                    StartApp("MetaTrader 5", Icons.Default.TrendingUp, DesktopWindow.MT5),
+                    StartApp("MetaEditor (MQL5)", Icons.Default.Code, DesktopWindow.MQL5_EDITOR),
+                    StartApp("Python 3.12", Icons.Default.Code, DesktopWindow.PYTHON_SHELL),
+                    StartApp("Git Bash", Icons.Default.Terminal, DesktopWindow.GIT_BASH),
+                    StartApp("SSH Manager", Icons.Default.CloudSync, DesktopWindow.SSH_MANAGER),
+                    StartApp("WinRAR", Icons.Default.FolderZip, DesktopWindow.WINRAR),
+                    StartApp("Task Manager", Icons.Default.AlignVerticalBottom, DesktopWindow.TASK_MANAGER),
+                    StartApp("Registry Editor", Icons.Default.Settings, DesktopWindow.REGISTRY_EDITOR),
+                    StartApp("AI ROC Route", Icons.Default.Route, DesktopWindow.AI_ROUTE),
+                    StartApp("DirectX Diag", Icons.Default.Info, DesktopWindow.DX_DIAG)
+                )
+                var startQuery by remember { mutableStateOf("") }
+                val filtered = if (startQuery.isBlank()) startApps else startApps.filter { it.title.contains(startQuery, ignoreCase = true) }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(y = (-56).dp)
+                        .zIndex(6f)
+                        .width(320.dp)
+                        .background(Win11Card, RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
+                        .padding(14.dp)
+                ) {
+                    // Search bar (filter hidup)
+                    TextField(
+                        value = startQuery,
+                        onValueChange = { startQuery = it },
+                        placeholder = { Text("Type here to search", fontSize = 12.sp, color = Color(0xFF909090)) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFFB0B0B0), modifier = Modifier.size(16.dp)) },
+                        singleLine = true,
+                        textStyle = TextStyle(fontSize = 12.sp, color = Color.White),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFF333333),
+                            unfocusedContainerColor = Color(0xFF333333),
+                            focusedIndicatorColor = Win11Accent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Pinned", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("All apps ›", color = Color(0xFFB0B0B0), fontSize = 11.sp)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        modifier = Modifier.heightIn(max = 240.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filtered) { app ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        openWin(app.window)
+                                        startMenuOpen = false
+                                        startQuery = ""
+                                    }
+                                    .padding(vertical = 8.dp)
                             ) {
+                                Icon(app.icon, contentDescription = app.title, tint = Win11Accent, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    app.title,
+                                    color = Color(0xFFE8E8E8),
+                                    fontSize = 9.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                    if (startQuery.isBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Recommended", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        listOf(
+                            "MT5 — Sell/Buy satu klik aktif" to DesktopWindow.MT5,
+                            "PowerShell — alias Get-* mendukung" to DesktopWindow.COMMAND_PROMPT
+                        ).forEach { (label, win) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { openWin(win); startMenuOpen = false }
+                                    .padding(vertical = 5.dp)
+                            ) {
+                                Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFFB0B0B0), modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(label, color = Color(0xFFD0D0D0), fontSize = 10.sp)
+                            }
+                        }
+                    }
+                    Divider(color = Win11Stroke, modifier = Modifier.padding(vertical = 8.dp))
+                    // Footer: user + power
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier.size(28.dp).background(Win11AccentSolid, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Administrator", color = Color.White, fontSize = 12.sp)
+                        }
+                        Box {
+                            IconButton(onClick = { powerOpen = !powerOpen }) {
+                                Icon(Icons.Default.PowerSettingsNew, contentDescription = "Power", tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+                            if (powerOpen) {
                                 Column(
-                                    modifier = Modifier.fillMaxSize().padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(y = (-52).dp)
+                                        .zIndex(8f)
+                                        .width(140.dp)
+                                        .background(Win11Card, RoundedCornerShape(8.dp))
+                                        .border(0.5.dp, Win11Stroke, RoundedCornerShape(8.dp))
                                 ) {
-                                    Slider(
-                                        value = volumeLevel,
-                                        onValueChange = { volumeLevel = it },
-                                        modifier = Modifier.weight(1f).graphicsLayer {
-                                            rotationZ = -90f
-                                        }
-                                    )
-                                    Text("${(volumeLevel * 100).toInt()}%", fontSize = 9.sp, color = Color.White)
+                                    ListItemPower("Shut down", Icons.Default.PowerSettingsNew) { onClose() }
+                                    ListItemPower("Restart", Icons.Default.Refresh) {
+                                        startMenuOpen = false
+                                        powerOpen = false
+                                        isBooting = true
+                                    }
                                 }
                             }
                         }
                     }
-                    
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(DarkSurface, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(Icons.Default.BatteryStd, contentDescription = "Battery", tint = SecondaryTeal, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("100%", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    // Close/Power Button
-                    IconButton(
-                        onClick = onClose,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(Color.Red.copy(alpha = 0.2f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.PowerSettingsNew, contentDescription = "Shutdown", tint = Color.Red, modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-
-            // Start Menu Dropup (disembunyikan saat Full Screen sejati)
-            if (startMenuOpen && !isFullscreen) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .offset(y = (-48).dp)
-                        .width(200.dp)
-                        .background(DarkSurface)
-                        .border(1.dp, Color.Gray)
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        "ROFWIN OS v1.0",
-                        fontWeight = FontWeight.Bold,
-                        color = PrimarySky,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
-                    )
-                    Divider()
-                    StartMenuItem("My Computer", Icons.Default.Computer) {
-                        openWin(DesktopWindow.MY_COMPUTER)
-                        startMenuOpen = false
-                    }
-                    StartMenuItem("Registry Editor", Icons.Default.Settings) {
-                        openWin(DesktopWindow.REGISTRY_EDITOR)
-                        startMenuOpen = false
-                    }
-                    StartMenuItem("Task Manager", Icons.Default.AlignVerticalBottom) {
-                        openWin(DesktopWindow.TASK_MANAGER)
-                        startMenuOpen = false
-                    }
-                    StartMenuItem("Command Prompt / PowerShell", Icons.Default.Terminal) {
-                        openWin(DesktopWindow.COMMAND_PROMPT)
-                        startMenuOpen = false
-                    }
-                    StartMenuItem("DirectX Diag", Icons.Default.Info) {
-                        openWin(DesktopWindow.DX_DIAG)
-                        startMenuOpen = false
-                    }
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                    StartMenuItem(
-                        text = if (lowRamMode) "Low-RAM Mode: ON (hemat 4GB)" else "Low-RAM Mode: OFF",
-                        icon = Icons.Default.Memory,
-                        tint = if (lowRamMode) SecondaryTeal else Color.White
-                    ) {
-                        lowRamMode = !lowRamMode
-                        prefs.edit().putBoolean("low_ram", lowRamMode).apply()
-                    }
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                    StartMenuItem("Log Out / Close", Icons.Default.PowerSettingsNew, Color.Red) {
-                        onClose()
-                    }
                 }
             }
         }
+    }
+}
+
+// Logo Windows 11 (4 kotak biru)
+@Composable
+fun Win11Logo(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cell = size.minDimension / 2f * 0.92f
+        val gap = size.minDimension * 0.08f
+        val c = Color(0xFF2CB9F0)
+        drawRect(c, topLeft = Offset(0f, 0f), size = androidx.compose.ui.geometry.Size(cell, cell))
+        drawRect(c, topLeft = Offset(cell + gap, 0f), size = androidx.compose.ui.geometry.Size(cell, cell))
+        drawRect(c, topLeft = Offset(0f, cell + gap), size = androidx.compose.ui.geometry.Size(cell, cell))
+        drawRect(c, topLeft = Offset(cell + gap, cell + gap), size = androidx.compose.ui.geometry.Size(cell, cell))
+    }
+}
+
+@Composable
+fun QsTile(icon: ImageVector, label: String, on: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (on) Win11AccentSolid else Color(0xFF3A3A3A))
+            .clickable { onClick() }
+            .padding(vertical = 10.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(label, color = Color.White, fontSize = 9.sp, maxLines = 1)
+    }
+}
+
+@Composable
+fun ListItemPower(text: String, icon: ImageVector, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text, color = Color.White, fontSize = 12.sp)
     }
 }
 
@@ -1099,11 +1567,11 @@ fun DesktopIconButton(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .background(PrimarySky.copy(alpha = 0.15f), CircleShape)
-                .border(1.dp, PrimarySky.copy(alpha = 0.5f), CircleShape),
+                .background(Color(0x22FFFFFF), RoundedCornerShape(10.dp))
+                .border(0.5.dp, Win11Stroke, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = name, tint = PrimarySky, modifier = Modifier.size(24.dp))
+            Icon(imageVector = icon, contentDescription = name, tint = Color(0xFFBEE3F8), modifier = Modifier.size(24.dp))
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
@@ -1195,7 +1663,8 @@ fun TerminalWindow(
     commandLogs: MutableList<String>,
     terminalInput: String,
     onInputChange: (String) -> Unit,
-    onLaunch: (DesktopWindow) -> Unit
+    onLaunch: (DesktopWindow) -> Unit,
+    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>
 ) {
     // Mode terminal: cmd.exe (hitam-hijau) atau powershell.exe (biru-putih)
     var psMode by remember { mutableStateOf(false) }
@@ -1274,36 +1743,43 @@ fun TerminalWindow(
                 commandLogs.add("InstanceId       : 8f2c1d44-rofwin-sim-0001")
             }
 
-            // ---- Filesystem ----
+            // ---- Filesystem (dinamis — membaca FS yang sama dengan File Explorer) ----
             cmd == "dir" || cmd == "ls" || cmd == "gci" || cmd == "get-childitem" -> {
                 commandLogs.add(" Directory of $cwd")
                 commandLogs.add("")
-                commandLogs.add("07/16/2026  10:24 AM    <DIR>          .")
-                commandLogs.add("07/16/2026  10:24 AM    <DIR>          ..")
-                if (cwd.startsWith("C:\\Windows")) {
-                    commandLogs.add("07/16/2026  10:24 AM           820,112 kernel32.dll")
-                    commandLogs.add("07/16/2026  10:24 AM           640,992 user32.dll")
-                    commandLogs.add("07/16/2026  10:24 AM           310,240 gdi32.dll")
-                    commandLogs.add("07/16/2026  10:24 AM            98,304 cmd.exe")
-                    commandLogs.add("07/16/2026  10:24 AM           251,904 powershell.exe")
-                } else {
-                    commandLogs.add("07/16/2026  10:24 AM    <DIR>          users")
-                    commandLogs.add("07/16/2026  10:24 AM    <DIR>          Program Files")
-                    commandLogs.add("07/16/2026  10:24 AM    <DIR>          Windows")
-                    commandLogs.add("07/16/2026  10:24 AM               256 boot.ini")
+                commandLogs.add("19/07/2026  19:00    <DIR>          .")
+                commandLogs.add("19/07/2026  19:00    <DIR>          ..")
+                val items = simulatedFiles[cwd] ?: emptyList()
+                var dirs = 2
+                var files = 0
+                items.forEach { f ->
+                    if (f.isDirectory) {
+                        dirs++
+                        commandLogs.add("19/07/2026  19:00    <DIR>          ${f.name}")
+                    } else {
+                        files++
+                        commandLogs.add("19/07/2026  19:00         ${f.size.padStart(8)}  ${f.name}")
+                    }
                 }
-                commandLogs.add("               4 Dir(s)  18,446,744,073,709,551,616 bytes free")
+                commandLogs.add("               $files File(s)")
+                commandLogs.add("               $dirs Dir(s)  18,446,744,073,709,551,616 bytes free")
             }
             cmd == "cd" || cmd == "chdir" || cmd == "pwd" || cmd == "get-location" -> commandLogs.add(cwd)
             cmd.startsWith("cd ") || cmd.startsWith("chdir ") || cmd.startsWith("set-location ") -> {
-                val t = arg.replace("/", "\\")
-                cwd = when {
-                    t == ".." -> cwd.substringBeforeLast('\\', "C:\\")
+                val t = arg.replace("/", "\\").trim()
+                var cand = when {
+                    t == ".." -> parentPath(cwd)
                     t == "\\" -> cwd.substringBefore('\\') + "\\"
-                    t.contains(":") -> t.trimEnd('\\')
-                    else -> (cwd.trimEnd('\\') + "\\" + t).trimEnd('\\')
+                    t.length >= 2 && t[1] == ':' -> if (t.length == 2) "$t\\" else t
+                    else -> cwd.trimEnd('\\') + "\\" + t
                 }
-                commandLogs.add("(now in $cwd)")
+                if (simulatedFiles.containsKey(cand)) {
+                    cwd = cand
+                } else if (simulatedFiles.containsKey(cand + "\\")) {
+                    cwd = cand + "\\"
+                } else {
+                    commandLogs.add("The system cannot find the path specified.")
+                }
             }
             cmd == "tree" -> {
                 commandLogs.add("C:\\")
@@ -1314,6 +1790,48 @@ fun TerminalWindow(
                 commandLogs.add("|   \\---WineD3D")
                 commandLogs.add("\\---users")
                 commandLogs.add("    \\---Administrator")
+            }
+
+            // ---- File ops NYATA — sinkron 100% dengan File Explorer ----
+            cmd.startsWith("mkdir ") || cmd.startsWith("md ") -> {
+                val name = arg.replace("/", "\\").trim()
+                if (name.isBlank()) {
+                    commandLogs.add("The syntax of the command is incorrect.")
+                } else {
+                    val newPath = cwd.trimEnd('\\') + "\\" + name
+                    if (simulatedFiles.containsKey(newPath)) {
+                        commandLogs.add("A subdirectory or file $name already exists.")
+                    } else {
+                        val list = simulatedFiles[cwd]?.toMutableList() ?: mutableListOf()
+                        list.add(SimFile(name, true, "Folder"))
+                        simulatedFiles[cwd] = list
+                        simulatedFiles[newPath] = emptyList()
+                        simulatedFiles[newPath + "\\"] = emptyList()
+                        commandLogs.add("(folder '$name' created — visible in File Explorer too)")
+                    }
+                }
+            }
+            cmd.startsWith("del ") || cmd.startsWith("erase ") || cmd.startsWith("rm ") || cmd.startsWith("remove-item ") -> {
+                val name = arg.trim()
+                val list = simulatedFiles[cwd]?.toMutableList() ?: mutableListOf()
+                val victim = list.firstOrNull { it.name.equals(name, ignoreCase = true) }
+                if (victim == null) {
+                    commandLogs.add("Could Not Find $cwd\\$name")
+                } else {
+                    list.remove(victim)
+                    simulatedFiles[cwd] = list
+                    commandLogs.add("(deleted '$name' — also removed from File Explorer)")
+                }
+            }
+            cmd.startsWith("type ") || cmd.startsWith("cat ") || cmd.startsWith("get-content ") -> {
+                val name = arg.trim()
+                val f = simulatedFiles[cwd]?.firstOrNull { it.name.equals(name, ignoreCase = true) && !it.isDirectory }
+                if (f == null) {
+                    commandLogs.add("The system cannot find the file specified.")
+                } else {
+                    commandLogs.add(":: $name (${f.size}) — konten simulasi:")
+                    commandLogs.add(":: Rofwin virtual file. Data tidak nyata.")
+                }
             }
 
             // ---- Networking ----
@@ -1474,7 +1992,12 @@ fun TerminalWindow(
 }
 
 @Composable
-fun WinRarWindow() {
+fun WinRarWindow(simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>) {
+    // Extract NYATA — menulis hasil ekstraksi ke FS bersama (terlihat di File Explorer!)
+    var extractProgress by remember { mutableFloatStateOf(0f) }
+    var statusMsg by remember { mutableStateOf("Ready. Archive: backup.rar (15 MB)") }
+    val scope = rememberCoroutineScope()
+
     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth().background(Color.Gray.copy(alpha = 0.2f)).padding(4.dp)) {
             listOf("File", "Commands", "Tools", "Favorites", "Options", "Help").forEach {
@@ -1482,23 +2005,59 @@ fun WinRarWindow() {
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Default.Add, contentDescription = null, tint = PrimarySky)
-            Icon(Icons.Default.Upload, contentDescription = null, tint = SecondaryTeal)
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Green)
-            Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
-            Icon(Icons.Default.FindInPage, contentDescription = null, tint = Color.Yellow)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = Win11Accent)
+            IconButton(onClick = {
+                // EXTRACT TO — D:\Work\extracted\
+                scope.launch {
+                    statusMsg = "Extracting to D:\\Work\\extracted..."
+                    extractProgress = 0f
+                    while (extractProgress < 1f) {
+                        delay(120)
+                        extractProgress += 0.1f
+                    }
+                    simulatedFiles["D:\\Work\\extracted"] = listOf(
+                        SimFile("database_dump.sql", false, "2 MB"),
+                        SimFile("config.json", false, "4 KB"),
+                        SimFile("logs", true, "Folder"),
+                        SimFile("src_backup", true, "Folder")
+                    )
+                    simulatedFiles["D:\\Work\\extracted\\logs"] = listOf(SimFile("app.log", false, "120 KB"))
+                    simulatedFiles["D:\\Work\\extracted\\src_backup"] = listOf(SimFile("main.py", false, "8 KB"))
+                    if (simulatedFiles["D:\\Work"]?.none { it.name == "extracted" } == true) {
+                        val list = simulatedFiles["D:\\Work"]!!.toMutableList()
+                        list.add(SimFile("extracted", true, "Folder"))
+                        simulatedFiles["D:\\Work"] = list
+                    }
+                    statusMsg = "✔ Done — buka D:\\Work\\extracted di File Explorer"
+                    extractProgress = 0f
+                }
+            }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Upload, contentDescription = "Extract", tint = SecondaryTeal)
+            }
+            Icon(Icons.Default.CheckCircle, contentDescription = "Test integrity", tint = Color.Green)
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(statusMsg, fontSize = 10.sp, color = if (statusMsg.startsWith("✔")) Color.Green else Color(0xFFB0B0B0))
+        if (extractProgress > 0f) {
+            LinearProgressIndicator(
+                progress = extractProgress,
+                color = Win11Accent,
+                trackColor = Color(0xFF333333),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
         Box(modifier = Modifier.fillMaxSize().border(1.dp, Color.Gray).background(DarkSurface).padding(8.dp)) {
             Column {
                 Text("Archive: backup.rar", color = Color.White, fontWeight = FontWeight.Bold)
                 Divider(modifier = Modifier.padding(vertical = 4.dp))
-                listOf("database_dump.sql", "config.json", "logs/", "src_backup/").forEach {
+                listOf("database_dump.sql" to "2 MB", "config.json" to "4 KB", "logs/" to "", "src_backup/" to "").forEach { (n, sz) ->
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (it.endsWith("/")) Icons.Default.Folder else Icons.Default.Description, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                        Icon(if (n.endsWith("/")) Icons.Default.Folder else Icons.Default.Description, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(it, color = Color.White, fontSize = 12.sp)
+                        Text(n, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(sz, color = TextSecondary, fontSize = 10.sp)
                     }
                 }
             }
@@ -1508,9 +2067,54 @@ fun WinRarWindow() {
 
 @Composable
 fun PythonShellWindow() {
-    val logs = remember { mutableStateListOf("Python 3.12.1 (tags/v3.12.1:2305ca5, Dec  7 2023, 22:03:25) [MSC v.1937 64 bit (AMD64)] on win32", "Type \"help\", \"copyright\", \"credits\" or \"license\" for more information.", ">>> ") }
+    // Python mini-interpreter NYATA: aritmetika penuh (+ - * / ( ) desimal) + print()
+    val logs = remember { mutableStateListOf("Python 3.12.1 (tags/v3.12.1:2305ca5, Dec  7 2023, 22:03:25) [MSC v.1937 64 bit (AMD64)] on win32", "Rofwin mini interpreter — coba: 72/5+3*(9-4), 2**10, print('halo')") }
     var input by remember { mutableStateOf("") }
-    
+
+    fun run(src: String) {
+        val t = src.trim()
+        if (t.isEmpty()) return
+        logs.add(">>> $t")
+        // power ** -> eval sebagai loop perkalian
+        fun evalExprWithPow(e: String): Double? {
+            var expr = e.replace(" ", "")
+            val powIdx = expr.indexOf("**")
+            if (powIdx > 0) {
+                // ambil operand kiri & kanan sederhana
+                var l = powIdx - 1
+                while (l >= 0 && (expr[l].isDigit() || expr[l] == '.')) l--
+                var r = powIdx + 2
+                while (r < expr.length && (expr[r].isDigit() || expr[r] == '.')) r++
+                val base = expr.substring(l + 1, powIdx).toDoubleOrNull()
+                val ex = expr.substring(powIdx + 2, r).toDoubleOrNull()
+                if (base != null && ex != null) {
+                    val res = Math.pow(base, ex)
+                    expr = expr.substring(0, l + 1) + res.toString() + expr.substring(r)
+                }
+            }
+            return evalPy(expr)
+        }
+        when {
+            t == "help" -> logs.add("Aritmetika: + - * / ( ) desimal, ** untuk pangkat. print('teks') / print(ekspresi)")
+            t.startsWith("print(") && t.endsWith(")") -> {
+                val inner = t.removePrefix("print(").dropLast(1).trim()
+                val quoted = Regex("^\"(.*)\"$|^'(.*)'$").find(inner)
+                if (quoted != null) {
+                    logs.add(quoted.groupValues[1].ifEmpty { quoted.groupValues[2] })
+                } else {
+                    val v = evalExprWithPow(inner)
+                    if (v != null) logs.add(if (v % 1.0 == 0.0) v.toLong().toString() else v.toString())
+                    else logs.add("SyntaxError: cannot evaluate '$inner'")
+                }
+            }
+            else -> {
+                val v = evalExprWithPow(t)
+                if (v != null) logs.add(if (v % 1.0 == 0.0) v.toLong().toString() else v.toString())
+                else logs.add("NameError: name '$t' is not defined")
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(Color.Black).padding(8.dp)) {
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(logs) { Text(it, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
@@ -1525,16 +2129,8 @@ fun PythonShellWindow() {
                 cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
-                    if (input.isNotBlank()) {
-                        logs.add(">>> $input")
-                        when (input.trim()) {
-                            "print('hello')" -> logs.add("hello")
-                            "2 + 2" -> logs.add("4")
-                            "import os; os.listdir()" -> logs.add("['Windows', 'Program Files', 'users']")
-                            else -> logs.add("NameError: name '$input' is not defined")
-                        }
-                        input = ""
-                    }
+                    run(input)
+                    input = ""
                 })
             )
         }
@@ -1543,30 +2139,80 @@ fun PythonShellWindow() {
 
 @Composable
 fun SshManagerWindow() {
-    var host by remember { mutableStateOf("192.168.1.105") }
-    var user by remember { mutableStateOf("admin") }
+    var host by remember { mutableStateOf("161.118.253.28") }
+    var user by remember { mutableStateOf("ubuntu") }
     var connected by remember { mutableStateOf(false) }
+    // Shell SSH interaktif setelah connect
+    val logs = remember { mutableStateListOf<String>() }
+    var cmdInput by remember { mutableStateOf("") }
+
+    fun runRemote(raw: String) {
+        val t = raw.trim()
+        if (t.isEmpty()) return
+        logs.add("$user@$host:~$ $t")
+        when (t) {
+            "ls" -> logs.add("webvirtcloud  docker  data  backups")
+            "ls -la" -> {
+                logs.add("drwxr-xr-x 4 $user $user 4096 .")
+                logs.add("drwxr-xr-x 3 root  root  4096 ..")
+                logs.add("-rw-r--r-- 1 $user $user  220 .bashrc")
+            }
+            "whoami" -> logs.add(user)
+            "pwd" -> logs.add("/home/$user")
+            "uname -a" -> logs.add("Linux oracle-vm 6.8.0 #1-Ubuntu SMP x86_64 GNU/Linux")
+            "exit" -> {
+                logs.add("logout")
+                logs.add("Connection to $host closed.")
+                connected = false
+            }
+            "clear" -> logs.clear()
+            else -> logs.add("$t: command not found (remote shell sim)")
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         if (!connected) {
-            Text("SSH Connection Setup", color = PrimarySky, fontWeight = FontWeight.Bold)
+            Text("SSH Connection Setup", color = Win11Accent, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("Host IP") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("Host IP") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { connected = true }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = {
+                logs.clear()
+                logs.add("Connecting to $host...")
+                logs.add("Welcome to Ubuntu 24.04 LTS (GNU/Linux 6.8.0 x86_64)")
+                logs.add("(remote shell simulasi — ls, whoami, pwd, uname -a, exit)")
+                connected = true
+            }, modifier = Modifier.fillMaxWidth()) {
                 Text("Connect Automatically")
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CloudDone, contentDescription = null, tint = Color.Green)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Connected to $host as $user", color = Color.White)
+                Text("Connected to $host as $user", color = Color.White, fontSize = 12.sp)
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black).padding(8.dp)) {
-                Text("admin@$host:~$ ls -la\ntotal 4k\ndrwxr-xr-x 2 admin admin 4096 Jul 16 20:15 .\ndrwxr-xr-x 3 root  root  4096 Jul 16 20:15 ..\n-rw-r--r-- 1 admin admin    0 Jul 16 20:15 .bash_history", color = Color.Green, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Column(modifier = Modifier.fillMaxSize().background(Color.Black).padding(8.dp)) {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(logs) { Text(it, color = Color.Green, fontFamily = FontFamily.Monospace, fontSize = 11.sp) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("$user@$host:~$ ", color = Color.Green, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    BasicTextField(
+                        value = cmdInput,
+                        onValueChange = { cmdInput = it },
+                        textStyle = TextStyle(color = Color.Green, fontFamily = FontFamily.Monospace, fontSize = 11.sp),
+                        modifier = Modifier.fillMaxWidth(),
+                        cursorBrush = SolidColor(Color.Green),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = {
+                            runRemote(cmdInput)
+                            cmdInput = ""
+                        })
+                    )
+                }
             }
         }
     }
@@ -1930,14 +2576,55 @@ fun BrowserWindow() {
 
 @Composable
 fun GitBashWindow() {
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)).padding(12.dp)) {
-        Text("ivansslo@CPH1823 MINGW64 /", color = Color(0xFFADFF2F), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-        Text("$ git fetch origin", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-        Text("From github.com:ivansslo/rofwin-agents", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-        Text(" * [new branch]      main       -> origin/main", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-        Text("$ git branch", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-        Text("* main", color = Color(0xFFADFF2F), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-        Text("$ _", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+    // Git Bash interaktif — perintah git umum hidup (mode simulasi lokal)
+    val logs = remember { mutableStateListOf("MINGW64 Git Bash — ketik 'help' untuk daftar perintah") }
+    var input by remember { mutableStateOf("") }
+
+    fun run(raw: String) {
+        val t = raw.trim()
+        if (t.isEmpty()) return
+        logs.add("$ $t")
+        when {
+            t == "help" -> {
+                logs.add("git status | git log | git branch | ls | pwd | clear")
+            }
+            t == "git status" -> {
+                logs.add("On branch main")
+                logs.add("nothing to commit, working tree clean")
+            }
+            t == "git log" || t == "git log --oneline" -> {
+                logs.add("ab56873 (HEAD -> main, tag: v1.4.0) feat: Windows 11 Edition")
+                logs.add("2becb4e build: gradle wrapper 9.3.1")
+            }
+            t == "git branch" -> logs.add("* main")
+            t == "ls" -> logs.add("app/  README.md  build.gradle.kts  settings.gradle.kts")
+            t == "pwd" -> logs.add("/c/rofwin")
+            t == "clear" -> logs.clear()
+            else -> logs.add("bash: $t: command not found")
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)).padding(8.dp)) {
+        Text("ivansslo@CPH1823 MINGW64 /c/rofwin", color = Color(0xFFADFF2F), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Spacer(modifier = Modifier.height(4.dp))
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(logs) { Text(it, color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("$ ", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            BasicTextField(
+                value = input,
+                onValueChange = { input = it },
+                textStyle = TextStyle(color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                modifier = Modifier.fillMaxWidth(),
+                cursorBrush = SolidColor(Color.White),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = {
+                    run(input)
+                    input = ""
+                })
+            )
+        }
     }
 }
 
