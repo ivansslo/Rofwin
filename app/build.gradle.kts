@@ -13,8 +13,8 @@ android {
         applicationId = "com.rofwin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 150
-        versionName = "1.5.0"
+        versionCode = 160
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

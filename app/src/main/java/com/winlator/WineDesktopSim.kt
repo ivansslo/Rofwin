@@ -60,6 +60,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.*
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
@@ -135,16 +136,150 @@ fun evalPy(expr: String): Double? = PyParser(expr).parse()
 
 // Window Type
 enum class DesktopWindow {
-    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER, MT5, MQL5_EDITOR, CODE_EDITOR, WINECFG, WINETRICKS
+    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER, MT5, MQL5_EDITOR, CODE_EDITOR, WINECFG, WINETRICKS, AI_CHAT
 }
 
-// Posisi trading MT5 (live P/L dihitung dari harga sim)
-data class Mt5Pos(val ticket: Long, val buy: Boolean, val sym: String, val lots: Double, val open: Double)
+// Posisi trading MT5 (live P/L dihitung dari harga sim; sl/tp opsional)
+data class Mt5Pos(val ticket: Long, val buy: Boolean, val sym: String, val lots: Double, val open: Double, val sl: Double = 0.0, val tp: Double = 0.0)
 
 // Candle untuk chart MT5
 data class Mt5Candle(val o: Float, var h: Float, var l: Float, var c: Float)
 
-// Struktur repo ivansslo/rocagents (HEAD, 57 entries) — ditanam ke FS aplikasi
+// Struktur repo ivansslo/rocd (HEAD, ~217 entries) — container manager (multi-OS)
+fun seedRocdFs(): Map<String, List<SimFile>> = mapOf(
+    "D:\\Work\\rocd" to listOf(SimFile("CLAUDE.md", false, "3 KB"), SimFile("LICENSE", false, "2 KB"), SimFile("README.md", false, "3 KB"), SimFile("SECURITY.md", false, "3 KB"), SimFile("install.sh", false, "2 KB"), SimFile("pyproject.toml", false, "1 KB"), SimFile("rocd", false, "2 KB"), SimFile("rocd.py", false, "5 KB"), SimFile("rocd_mod", true), SimFile("screenshot.png", false, "2 KB"), SimFile("tests", true)),
+    "D:\\Work\\rocd\\rocd_mod" to listOf(SimFile("__init__.py", false, "5 KB"), SimFile("arch.py", false, "5 KB"), SimFile("atomic.py", false, "5 KB"), SimFile("cli.py", false, "5 KB"), SimFile("commands", true), SimFile("completions", true), SimFile("constants.py", false, "5 KB"), SimFile("helpers", true), SimFile("l2s.py", false, "5 KB"), SimFile("locking.py", false, "5 KB"), SimFile("message.py", false, "5 KB"), SimFile("names.py", false, "5 KB"), SimFile("parser.py", false, "5 KB"), SimFile("paths.py", false, "5 KB"), SimFile("progress.py", false, "5 KB"), SimFile("session.py", false, "5 KB"), SimFile("sysdata.py", false, "5 KB")),
+    "D:\\Work\\rocd\\rocd_mod\\commands" to listOf(SimFile("__init__.py", false, "5 KB"), SimFile("backup.py", false, "5 KB"), SimFile("build.py", false, "5 KB"), SimFile("clear_cache.py", false, "5 KB"), SimFile("copy.py", false, "5 KB"), SimFile("help", true), SimFile("install.py", false, "5 KB"), SimFile("install_local.py", false, "5 KB"), SimFile("kill.py", false, "5 KB"), SimFile("list.py", false, "5 KB"), SimFile("login", true), SimFile("ps.py", false, "5 KB"), SimFile("push.py", false, "5 KB"), SimFile("remove.py", false, "5 KB"), SimFile("rename.py", false, "5 KB"), SimFile("reset.py", false, "5 KB"), SimFile("restore.py", false, "5 KB"), SimFile("run.py", false, "5 KB"), SimFile("sync.py", false, "5 KB")),
+    "D:\\Work\\rocd\\rocd_mod\\commands\\help" to listOf(SimFile("__init__.py", false, "5 KB"), SimFile("pages.py", false, "5 KB"), SimFile("render.py", false, "5 KB")),
+    "D:\\Work\\rocd\\rocd_mod\\commands\\login" to listOf(SimFile("__init__.py", false, "5 KB"), SimFile("bindings.py", false, "5 KB"), SimFile("detach.py", false, "5 KB"), SimFile("env.py", false, "5 KB"), SimFile("migrate.py", false, "5 KB"), SimFile("passwd.py", false, "5 KB"), SimFile("proot_cmd.py", false, "5 KB"), SimFile("quoting.py", false, "5 KB")),
+    "D:\\Work\\rocd\\rocd_mod\\completions" to listOf(SimFile("_proot-distro", false, "2 KB"), SimFile("proot-distro.bash", false, "2 KB"), SimFile("proot-distro.fish", false, "2 KB")),
+    "D:\\Work\\rocd\\rocd_mod\\helpers" to listOf(SimFile("__init__.py", false, "5 KB"), SimFile("build_cache.py", false, "5 KB"), SimFile("build_engine", true), SimFile("docker", true), SimFile("dockerfile.py", false, "5 KB"), SimFile("download.py", false, "5 KB"), SimFile("layer_diff.py", false, "5 KB"), SimFile("oci_writer.py", false, "5 KB"), SimFile("rootfs.py", false, "5 KB"), SimFile("tar_extract.py", false, "5 KB")),
+    "D:\\Work\\rocd\\rocd_mod\\helpers\\build_engine" to listOf(SimFile("__init__.py", false, "5 KB"), SimFile("constants.py", false, "5 KB"), SimFile("copy_step.py", false, "5 KB"), SimFile("dockerignore.py", false, "5 KB"), SimFile("engine.py", false, "5 KB"), SimFile("errors.py", false, "5 KB"), SimFile("handlers.py", false, "5 KB"), SimFile("parsing.py", false, "5 KB"), SimFile("run_step.py", false, "5 KB"), SimFile("stage.py", false, "5 KB"), SimFile("users.py", false, "5 KB")),
+    "D:\\Work\\rocd\\rocd_mod\\helpers\\docker" to listOf(SimFile("__init__.py", false, "5 KB"), SimFile("cache.py", false, "5 KB"), SimFile("layers.py", false, "5 KB"), SimFile("media.py", false, "5 KB"), SimFile("pull.py", false, "5 KB"), SimFile("push.py", false, "5 KB"), SimFile("refs.py", false, "5 KB"), SimFile("transport.py", false, "5 KB")),
+    "D:\\Work\\rocd\\tests" to listOf(SimFile("README.md", false, "3 KB"), SimFile("_builders.py", false, "5 KB"), SimFile("conftest.py", false, "5 KB"), SimFile("integration", true), SimFile("live", true), SimFile("security", true), SimFile("unit", true)),
+    "D:\\Work\\rocd\\tests\\integration" to listOf(SimFile("test_backup_restore_roundtrip.py", false, "5 KB"), SimFile("test_build_end_to_end.py", false, "5 KB"), SimFile("test_clear_cache_and_list.py", false, "5 KB"), SimFile("test_cli_dispatch.py", false, "5 KB"), SimFile("test_copy_sync.py", false, "5 KB"), SimFile("test_install_local_oci.py", false, "5 KB"), SimFile("test_install_local_tar.py", false, "5 KB"), SimFile("test_login_get_proot_cmd.py", false, "5 KB"), SimFile("test_pull_offline.py", false, "5 KB"), SimFile("test_remove_rename_reset.py", false, "5 KB")),
+    "D:\\Work\\rocd\\tests\\live" to listOf(SimFile("test_live_proot.py", false, "5 KB"), SimFile("test_live_pull.py", false, "5 KB")),
+    "D:\\Work\\rocd\\tests\\security" to listOf(SimFile("test_bind_validation.py", false, "5 KB"), SimFile("test_copy_step_traversal.py", false, "5 KB"), SimFile("test_oci_blob_traversal.py", false, "5 KB"), SimFile("test_restore_dest_path.py", false, "5 KB"), SimFile("test_tar_extract_traversal.py", false, "5 KB")),
+    "D:\\Work\\rocd\\tests\\unit" to listOf(SimFile("test_arch.py", false, "5 KB"), SimFile("test_atomic.py", false, "5 KB"), SimFile("test_dockerfile.py", false, "5 KB"), SimFile("test_download.py", false, "5 KB"), SimFile("test_handlers.py", false, "5 KB"), SimFile("test_layer_diff.py", false, "5 KB"), SimFile("test_locking.py", false, "5 KB"), SimFile("test_login_env.py", false, "5 KB"), SimFile("test_message.py", false, "5 KB"), SimFile("test_names.py", false, "5 KB"), SimFile("test_parser.py", false, "5 KB"), SimFile("test_pull_offline.py", false, "5 KB")),
+)
+
+// Baseline simbol MT5 (dipakai AI untuk mengukur perubahan harga)
+val MT5_BASELINE = mapOf(
+    "EURUSD" to 1.09250, "GBPUSD" to 1.27510, "USDJPY" to 145.305, "USDCHF" to 0.88120,
+    "AUDUSD" to 0.66240, "NZDUSD" to 0.59980, "USDCAD" to 1.36150, "EURGBP" to 0.85680,
+    "EURJPY" to 158.720, "GBPJPY" to 185.340, "AUDJPY" to 96.240, "EURAUD" to 1.64850,
+    "GBPAUD" to 1.92430, "USDSGD" to 1.34260, "USDIDR" to 16305.0, "XAUUSD" to 2385.40,
+    "XAGUSD" to 31.240, "BTCUSD" to 97450.0, "ETHUSD" to 3420.0, "US30" to 41250.0,
+    "NAS100" to 18960.0, "SPX500" to 5620.0, "UKOIL" to 82.45, "WTI" to 78.30
+)
+
+fun mt5DigitsOf(sym: String) = when {
+    sym.endsWith("JPY") -> 3
+    sym == "USDIDR" -> 0
+    sym == "XAUUSD" || sym == "XAGUSD" || sym == "UKOIL" || sym == "WTI" || sym == "ETHUSD" -> 2
+    sym == "BTCUSD" || sym == "US30" || sym == "NAS100" || sym == "SPX500" -> 1
+    else -> 5
+}
+fun mt5Fmt(sym: String, v: Double) = "%.${mt5DigitsOf(sym)}f".format(v)
+fun mt5SpreadOf(sym: String) = when {
+    sym.endsWith("JPY") -> 0.015; sym == "USDIDR" -> 8.0
+    sym == "XAUUSD" -> 0.35; sym == "XAGUSD" -> 0.025
+    sym == "BTCUSD" -> 25.0; sym == "ETHUSD" -> 2.0
+    sym == "US30" || sym == "NAS100" -> 2.0; sym == "SPX500" -> 0.6
+    sym == "UKOIL" || sym == "WTI" -> 0.04
+    else -> 0.00015
+}
+fun mt5PnlFactor(sym: String) = when {
+    sym.endsWith("JPY") -> 1000.0; sym == "USDIDR" -> 0.01
+    sym == "XAUUSD" -> 100.0; sym == "XAGUSD" -> 5000.0
+    sym == "BTCUSD" -> 1.0; sym == "ETHUSD" -> 10.0
+    sym == "US30" || sym == "NAS100" || sym == "SPX500" -> 100.0
+    sym == "UKOIL" || sym == "WTI" -> 10.0
+    else -> 100000.0
+}
+fun mt5VolOf(sym: String) = when {
+    sym == "BTCUSD" || sym == "ETHUSD" || sym == "US30" || sym == "NAS100" || sym == "SPX500" -> 0.0012f
+    sym == "XAUUSD" -> 0.0007f
+    else -> 0.0004f
+}
+
+// ===== HTTP + JSON helpers untuk ROC AI =====
+fun httpGet(url: String, bearer: String = ""): Pair<Int, String> = try {
+    val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+    c.connectTimeout = 9000; c.readTimeout = 9000
+    c.setRequestProperty("User-Agent", "Rofwin/1.6")
+    c.setRequestProperty("Accept", "application/vnd.github+json")
+    if (bearer.isNotEmpty()) c.setRequestProperty("Authorization", "Bearer $bearer")
+    val code = c.responseCode
+    val txt = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: ""
+    c.disconnect()
+    code to txt
+} catch (e: Exception) { -1 to (e.message ?: "io error") }
+
+fun httpPostJson(url: String, bearer: String, json: String): Pair<Int, String> = try {
+    val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+    c.requestMethod = "POST"
+    c.connectTimeout = 12000; c.readTimeout = 45000
+    c.setRequestProperty("Content-Type", "application/json")
+    c.setRequestProperty("User-Agent", "Rofwin/1.6")
+    if (bearer.isNotEmpty()) c.setRequestProperty("Authorization", "Bearer $bearer")
+    c.doOutput = true
+    c.outputStream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+    val code = c.responseCode
+    val txt = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: ""
+    c.disconnect()
+    code to txt
+} catch (e: Exception) { -1 to (e.message ?: "io error") }
+
+fun jsonStr(s: String): String = buildString {
+    append('"')
+    s.forEach { c -> when (c) {
+        '"' -> append("\\\""); '\\' -> append("\\\\")
+        '\n' -> append("\\n"); '\r' -> append("\\r"); '\t' -> append("\\t")
+        else -> append(c)
+    } }
+    append('"')
+}
+
+// Template EA lokal (dipakai AI saat offline — tanpa API key)
+const val AI_EA_TEMPLATE = """//+------------------------------------------------------------------+
+//| AI-Generated: MA Cross Scalper (template lokal Rofwin)          |
+//+------------------------------------------------------------------+
+#property copyright "ROC-AI"
+#property version   "1.00"
+#property strict
+
+input int    FastMA = 7;
+input int    SlowMA = 21;
+input double Lots   = 0.01;
+input int    StopLossPips = 25;
+input int    TakeProfitPips = 50;
+
+int OnInit()
+  {
+   Print("EA AI MA-Cross aktif");
+   return(INIT_SUCCEEDED);
+  }
+
+void OnTick()
+  {
+   double fast = iMA(NULL, 0, FastMA, 0, MODE_SMA, PRICE_CLOSE, 0);
+   double slow = iMA(NULL, 0, SlowMA, 0, MODE_SMA, PRICE_CLOSE, 0);
+   double prevFast = iMA(NULL, 0, FastMA, 0, MODE_SMA, PRICE_CLOSE, 1);
+   double prevSlow = iMA(NULL, 0, SlowMA, 0, MODE_SMA, PRICE_CLOSE, 1);
+
+   if(fast > slow && prevFast <= prevSlow)
+     {
+      // sinyal BUY — golden cross
+      Print("Signal BUY @ ", Bid);
+     }
+   if(fast < slow && prevFast >= prevSlow)
+     {
+      // sinyal SELL — death cross
+      Print("Signal SELL @ ", Ask);
+     }
+  }
+"""
 fun seedRocAgentsFs(): Map<String, List<SimFile>> = mapOf(
     "D:\\Work\\rocagents" to listOf(
         SimFile("bin", true), SimFile("dashboard", true), SimFile("oci", true),
@@ -366,10 +501,18 @@ fun WineDesktopSim(
             )
         }
     }
-    // Tanam repo ivansslo/rocagents (struktur asli GitHub HEAD)
+    // Tanam repo ivansslo/rocagents + ivansslo/rocd (struktur asli GitHub HEAD)
     LaunchedEffect(Unit) {
         if (!simulatedFiles.containsKey("D:\\Work\\rocagents")) {
             seedRocAgentsFs().forEach { (k, v) -> simulatedFiles[k] = v }
+        }
+        if (!simulatedFiles.containsKey("D:\\Work\\rocd")) {
+            seedRocdFs().forEach { (k, v) -> simulatedFiles[k] = v }
+            val list = simulatedFiles["D:\\Work"]?.toMutableList() ?: mutableListOf()
+            if (list.none { it.name == "rocd" }) {
+                list.add(SimFile("rocd", true))
+                simulatedFiles["D:\\Work"] = list
+            }
         }
     }
 
@@ -383,6 +526,170 @@ fun WineDesktopSim(
     }
     // EA yang terkompilasi (MQL5) — terbaca MT5 Navigator, bisa di-attach
     val expertAdvisors = remember { mutableStateListOf<String>() }
+
+    // ===== State trading BERSAMA (bot jalan terus walau MT5 di-minimize) =====
+    val mt5Mids = remember { mutableStateMapOf<String, Double>() }
+    val mt5PrevMids = remember { mutableStateMapOf<String, Double>() }
+    val mt5Candles = remember { mutableStateListOf<Mt5Candle>() }
+    val mt5Positions = remember { mutableStateListOf<Mt5Pos>() }
+    val mt5History = remember { mutableStateListOf<String>() }
+    val mt5Journal = remember { mutableStateListOf("Rofwin MT5 sim terminal ready — feed lokal + ROC-AI") }
+    val mt5ActiveEAs = remember { mutableStateMapOf<String, String>() }
+    var mt5Balance by remember { mutableFloatStateOf(10000f) }
+    var mt5Ticket by remember { mutableLongStateOf(53000100L) }
+    val mt5Rnd = remember { java.util.Random() }
+
+    // ===== Live tick engine GLOBAL (harga + candle + EA auto-trade, 24/7 di desktop) =====
+    LaunchedEffect(lowRamMode) {
+        if (mt5Mids.isEmpty()) MT5_BASELINE.forEach { (k, v) -> mt5Mids[k] = v; mt5PrevMids[k] = v }
+        if (mt5Candles.isEmpty()) {
+            var v = 50f
+            repeat(60) {
+                val o = v
+                v = (v + (mt5Rnd.nextFloat() - 0.48f) * 4f).coerceIn(5f, 95f)
+                val c = v
+                mt5Candles.add(Mt5Candle(o, maxOf(o, c) + mt5Rnd.nextFloat() * 1.5f, minOf(o, c) - mt5Rnd.nextFloat() * 1.5f, c))
+            }
+        }
+        var tick = 0
+        while (true) {
+            delay(if (lowRamMode) 2200L else 800L)
+            tick++
+            mt5Mids.keys.toList().forEach { s ->
+                val old = mt5Mids[s] ?: 1.0
+                mt5PrevMids[s] = old
+                mt5Mids[s] = old * (1.0 + (mt5Rnd.nextFloat() - 0.5f) * 2f * mt5VolOf(s))
+            }
+            if (mt5Candles.isNotEmpty()) {
+                val last = mt5Candles.last()
+                last.c = (last.c + (mt5Rnd.nextFloat() - 0.48f) * 3f).coerceIn(5f, 95f)
+                if (last.c > last.h) last.h = last.c
+                if (last.c < last.l) last.l = last.c
+                if (tick % 4 == 0) {
+                    val o = last.c
+                    mt5Candles.removeAt(0)
+                    mt5Candles.add(Mt5Candle(o, o + 0.5f, o - 0.5f, o))
+                }
+            }
+            // Auto-close SL/TP (dicek tiap tick — seperti server MT5 asli)
+            mt5Positions.toList().forEach { p ->
+                if (p.sl > 0.0 || p.tp > 0.0) {
+                    val mid = mt5Mids[p.sym] ?: return@forEach
+                    val hitSl = p.sl > 0.0 && (if (p.buy) mid <= p.sl else mid >= p.sl)
+                    val hitTp = p.tp > 0.0 && (if (p.buy) mid >= p.tp else mid <= p.tp)
+                    if (hitSl || hitTp) {
+                        val pnl = (if (p.buy) (mid - p.open) else (p.open - mid)) * p.lots * mt5PnlFactor(p.sym)
+                        mt5Positions.remove(p)
+                        mt5Balance += pnl.toFloat()
+                        val tag = if (hitTp) "TP hit" else "SL hit"
+                        mt5History.add(0, "#${p.ticket} ${if (p.buy) "buy" else "sell"} ${p.lots} ${p.sym} @ ${mt5Fmt(p.sym, p.open)} → P/L ${"%.2f".format(pnl)} USD [$tag]")
+                        mt5Journal.add(0, "close #${p.ticket} ${p.sym} @ ${mt5Fmt(p.sym, mid)} — $tag, profit ${"%.2f".format(pnl)}")
+                    }
+                }
+            }
+            // EA auto-trade global — jalan walau jendela MT5 ditutup
+            mt5ActiveEAs.forEach { (ea, sym) ->
+                val r = mt5Rnd.nextFloat()
+                if (r < 0.05f) {
+                    val mid = mt5Mids[sym] ?: 0.0
+                    if (mid > 0.0) {
+                        val buy = mt5Rnd.nextBoolean()
+                        val px = if (buy) mid + mt5SpreadOf(sym) else mid
+                        mt5Positions.add(Mt5Pos(mt5Ticket++, buy, sym, 0.01, px))
+                        mt5Journal.add(0, "open #${mt5Ticket - 1} ${if (buy) "buy" else "sell"} 0.01 $sym @ ${mt5Fmt(sym, px)} [EA $ea]")
+                    }
+                } else if (r < 0.085f) {
+                    mt5Positions.firstOrNull { it.sym == sym }?.let { p ->
+                        val mid = mt5Mids[p.sym] ?: p.open
+                        val pnl = (if (p.buy) (mid - p.open) else (p.open - mid)) * p.lots * mt5PnlFactor(p.sym)
+                        mt5Positions.remove(p)
+                        mt5Balance += pnl.toFloat()
+                        mt5History.add(0, "#${p.ticket} ${if (p.buy) "buy" else "sell"} ${p.lots} ${p.sym} @ ${mt5Fmt(p.sym, p.open)} → P/L ${"%.2f".format(pnl)} USD [EA $ea]")
+                        mt5Journal.add(0, "close #${p.ticket} ${p.sym} profit ${"%.2f".format(pnl)} [EA $ea]")
+                    }
+                }
+            }
+            if (mt5History.size > 60) mt5History.removeLast()
+            if (mt5Journal.size > 120) mt5Journal.removeLast()
+        }
+    }
+
+    // ===== Sesi tersave di storage (autosave tiap 5 dtk — unlimited, tahan tutup app) =====
+    LaunchedEffect(Unit) {
+        // ---- restore ----
+        prefs.getString("rofwin_session_v2", null)?.let { blob ->
+            try {
+                val root = kotlinx.serialization.json.Json.parseToJsonElement(blob).jsonObject
+                root["fs"]?.jsonObject?.forEach { (path, arr) ->
+                    simulatedFiles[path] = arr.jsonArray.map { el ->
+                        val o = el.jsonObject
+                        SimFile(o["n"]!!.jsonPrimitive.content, o["d"]!!.jsonPrimitive.content == "1", o["s"]!!.jsonPrimitive.content)
+                    }
+                }
+                root["files"]?.jsonObject?.forEach { (p, v) -> fileContents[p] = v.jsonPrimitive.content }
+                root["eas"]?.jsonArray?.forEach { e ->
+                    val n = e.jsonPrimitive.content
+                    if (!expertAdvisors.contains(n)) expertAdvisors.add(n)
+                }
+                root["balance"]?.jsonPrimitive?.content?.toFloatOrNull()?.let { mt5Balance = it }
+                root["ticket"]?.jsonPrimitive?.content?.toLongOrNull()?.let { mt5Ticket = it }
+                root["positions"]?.jsonArray?.forEach { el ->
+                    val o = el.jsonObject
+                    mt5Positions.add(Mt5Pos(o["t"]!!.jsonPrimitive.content.toLong(), o["b"]!!.jsonPrimitive.content == "1", o["s"]!!.jsonPrimitive.content, o["l"]!!.jsonPrimitive.content.toDouble(), o["p"]!!.jsonPrimitive.content.toDouble()))
+                }
+                root["history"]?.jsonArray?.forEach { mt5History.add(it.jsonPrimitive.content) }
+                root["journal"]?.jsonArray?.forEach { mt5Journal.add(it.jsonPrimitive.content) }
+                root["activeEAs"]?.jsonObject?.forEach { (ea, sym) -> mt5ActiveEAs[ea] = sym.jsonPrimitive.content }
+                mt5Journal.add(0, "✔ sesi dipulihkan dari storage (file, FS, positions, EA)")
+            } catch (_: Exception) {}
+        }
+        // ---- autosave loop ----
+        while (true) {
+            delay(5000)
+            try {
+                val sb = StringBuilder()
+                sb.append("{\"fs\":{")
+                var first = true
+                simulatedFiles.forEach { (path, list) ->
+                    if (!first) sb.append(",")
+                    first = false
+                    sb.append(jsonStr(path)).append(":[")
+                    list.forEachIndexed { i, f ->
+                        if (i > 0) sb.append(",")
+                        sb.append("{\"n\":").append(jsonStr(f.name)).append(",\"d\":\"").append(if (f.isDirectory) "1" else "0").append("\",\"s\":").append(jsonStr(f.size)).append("}")
+                    }
+                    sb.append("]")
+                }
+                sb.append("},\"files\":{")
+                first = true
+                fileContents.forEach { (p, c) ->
+                    if (!first) sb.append(",")
+                    first = false
+                    sb.append(jsonStr(p)).append(":").append(jsonStr(c))
+                }
+                sb.append("},\"eas\":[")
+                expertAdvisors.forEachIndexed { i, ea -> if (i > 0) sb.append(","); sb.append(jsonStr(ea)) }
+                sb.append("],\"balance\":\"").append(mt5Balance).append("\",\"ticket\":\"").append(mt5Ticket).append("\",\"positions\":[")
+                mt5Positions.forEachIndexed { i, p ->
+                    if (i > 0) sb.append(",")
+                    sb.append("{\"t\":\"").append(p.ticket).append("\",\"b\":\"").append(if (p.buy) "1" else "0").append("\",\"s\":\"").append(p.sym).append("\",\"l\":\"").append(p.lots).append("\",\"p\":\"").append(p.open).append("\"}")
+                }
+                sb.append("],\"history\":[")
+                mt5History.take(40).forEachIndexed { i, h -> if (i > 0) sb.append(","); sb.append(jsonStr(h)) }
+                sb.append("],\"journal\":[")
+                mt5Journal.take(40).forEachIndexed { i, j -> if (i > 0) sb.append(","); sb.append(jsonStr(j)) }
+                sb.append("],\"activeEAs\":{")
+                first = true
+                mt5ActiveEAs.forEach { (ea, sym) ->
+                    if (!first) sb.append(",")
+                    first = false
+                    sb.append(jsonStr(ea)).append(":").append(jsonStr(sym))
+                }
+                sb.append("}}")
+                prefs.edit().putString("rofwin_session_v2", sb.toString()).apply()
+            } catch (_: Exception) {}
+        }
+    }
 
     var newFileName by remember { mutableStateOf("") }
     var fileTypeFolder by remember { mutableStateOf(false) }
@@ -559,6 +866,11 @@ fun WineDesktopSim(
                     onClick = { openWin(DesktopWindow.CODE_EDITOR) }
                 )
                 DesktopIconButton(
+                    name = "ROC AI",
+                    icon = Icons.Default.SmartToy,
+                    onClick = { openWin(DesktopWindow.AI_CHAT) }
+                )
+                DesktopIconButton(
                     name = "Git Bash",
                     icon = Icons.Default.Terminal,
                     onClick = { openWin(DesktopWindow.GIT_BASH) }
@@ -618,6 +930,7 @@ fun WineDesktopSim(
                     ) {
                         val quickTools = listOf(
                             Triple("MT5", Icons.Default.TrendingUp, DesktopWindow.MT5),
+                            Triple("AI", Icons.Default.SmartToy, DesktopWindow.AI_CHAT),
                             Triple("Code", Icons.Default.Code, DesktopWindow.CODE_EDITOR),
                             Triple("PS1", Icons.Default.Terminal, DesktopWindow.COMMAND_PROMPT),
                             Triple("Wine", Icons.Default.Settings, DesktopWindow.WINECFG),
@@ -660,8 +973,8 @@ fun WineDesktopSim(
                         .background(Color(0xFF202020))
                     else -> Modifier
                         .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
-                        .width(420.dp)
-                        .height(350.dp)
+                        .fillMaxWidth(0.96f)
+                        .fillMaxHeight(0.72f)
                         .shadow(24.dp, winShape, ambientColor = Color.Black, spotColor = Color.Black)
                         .clip(winShape)
                         .background(Color(0xFF202020))
@@ -1164,7 +1477,32 @@ fun WineDesktopSim(
                                     SshManagerWindow()
                                 }
                                 DesktopWindow.MT5 -> {
-                                    Mt5Window(lowRam = lowRamMode, expertAdvisors = expertAdvisors)
+                                    Mt5Window(
+                                        lowRam = lowRamMode,
+                                        mids = mt5Mids,
+                                        prevMids = mt5PrevMids,
+                                        candles = mt5Candles,
+                                        positions = mt5Positions,
+                                        tradeHistory = mt5History,
+                                        journalLogs = mt5Journal,
+                                        activeEAs = mt5ActiveEAs,
+                                        balance = mt5Balance,
+                                        onBalance = { mt5Balance = it },
+                                        ticket = mt5Ticket,
+                                        onTicket = { mt5Ticket = it },
+                                        expertAdvisors = expertAdvisors
+                                    )
+                                }
+                                DesktopWindow.AI_CHAT -> {
+                                    RocAiWindow(
+                                        fileContents = fileContents,
+                                        simulatedFiles = simulatedFiles,
+                                        expertAdvisors = expertAdvisors,
+                                        mids = mt5Mids,
+                                        positions = mt5Positions,
+                                        balance = mt5Balance,
+                                        onLaunch = { w -> openWin(w) }
+                                    )
                                 }
                                 DesktopWindow.MQL5_EDITOR -> {
                                     // MQL5 Editor kini = Rofwin Code yang langsung membuka Expert.mq5
@@ -1193,7 +1531,7 @@ fun WineDesktopSim(
                                     BrowserWindow()
                                 }
                                 DesktopWindow.GIT_BASH -> {
-                                    GitBashWindow()
+                                    GitBashWindow(simulatedFiles)
                                 }
                                 DesktopWindow.AI_ROUTE -> {
                                     AiRouteWindow()
@@ -1251,9 +1589,9 @@ fun WineDesktopSim(
                     }
                 }
 
-                // Tengah: Start + pinned + running — absolute center (rapi ala Win11)
+                // Tengah: Start + pinned + running — absolute center + scrollable (compact CPH1823)
                 Row(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier.align(Alignment.Center).horizontalScroll(rememberScrollState()),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -1273,6 +1611,7 @@ fun WineDesktopSim(
                         DesktopWindow.MY_COMPUTER,
                         DesktopWindow.BROWSER,
                         DesktopWindow.CODE_EDITOR,
+                        DesktopWindow.AI_CHAT,
                         DesktopWindow.COMMAND_PROMPT,
                         DesktopWindow.MT5,
                         DesktopWindow.TASK_MANAGER
@@ -1286,7 +1625,7 @@ fun WineDesktopSim(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier
-                                .width(42.dp)
+                                .width(37.dp)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(4.dp))
                                 .clickable {
@@ -1305,7 +1644,7 @@ fun WineDesktopSim(
                                 getWindowIcon(win),
                                 contentDescription = getWindowTitle(win),
                                 tint = if (isOpen) Win11Accent else Color(0xFFE8E8E8),
-                                modifier = Modifier.size(21.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                             Spacer(modifier = Modifier.weight(1f))
                             Box(
@@ -1392,7 +1731,8 @@ fun WineDesktopSim(
                         .align(Alignment.BottomStart)
                         .offset(y = (-52).dp)
                         .zIndex(6f)
-                        .width(250.dp)
+                        .fillMaxWidth(0.8f)
+                        .widthIn(max = 280.dp)
                         .background(Win11Card, RoundedCornerShape(12.dp))
                         .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
                         .padding(12.dp)
@@ -1432,7 +1772,8 @@ fun WineDesktopSim(
                         .align(Alignment.BottomEnd)
                         .offset(y = (-52).dp)
                         .zIndex(6f)
-                        .width(260.dp)
+                        .fillMaxWidth(0.82f)
+                        .widthIn(max = 300.dp)
                         .background(Win11Card, RoundedCornerShape(12.dp))
                         .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
                         .padding(12.dp)
@@ -1489,7 +1830,8 @@ fun WineDesktopSim(
                         .align(Alignment.BottomEnd)
                         .offset(y = (-52).dp)
                         .zIndex(6f)
-                        .width(260.dp)
+                        .fillMaxWidth(0.85f)
+                        .widthIn(max = 300.dp)
                         .background(Win11Card, RoundedCornerShape(12.dp))
                         .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
                         .padding(12.dp)
@@ -1527,6 +1869,7 @@ fun WineDesktopSim(
                     StartApp("Google Chrome", Icons.Default.Language, DesktopWindow.BROWSER),
                     StartApp("Terminal", Icons.Default.Terminal, DesktopWindow.COMMAND_PROMPT),
                     StartApp("MetaTrader 5", Icons.Default.TrendingUp, DesktopWindow.MT5),
+                    StartApp("ROC AI Assistant", Icons.Default.SmartToy, DesktopWindow.AI_CHAT),
                     StartApp("Rofwin Code", Icons.Default.Code, DesktopWindow.CODE_EDITOR),
                     StartApp("MetaEditor (MQL5)", Icons.Default.Code, DesktopWindow.MQL5_EDITOR),
                     StartApp("Wine Config", Icons.Default.Settings, DesktopWindow.WINECFG),
@@ -1548,7 +1891,8 @@ fun WineDesktopSim(
                         .align(Alignment.BottomCenter)
                         .offset(y = (-56).dp)
                         .zIndex(6f)
-                        .width(320.dp)
+                        .fillMaxWidth(0.94f)
+                        .widthIn(max = 360.dp)
                         .background(Win11Card, RoundedCornerShape(12.dp))
                         .border(0.5.dp, Win11Stroke, RoundedCornerShape(12.dp))
                         .padding(14.dp)
@@ -1801,6 +2145,7 @@ fun getWindowIcon(window: DesktopWindow): ImageVector {
         DesktopWindow.CODE_EDITOR -> Icons.Default.Code
         DesktopWindow.WINECFG -> Icons.Default.Settings
         DesktopWindow.WINETRICKS -> Icons.Default.Handyman
+        DesktopWindow.AI_CHAT -> Icons.Default.SmartToy
         else -> Icons.Default.Laptop
     }
 }
@@ -1823,6 +2168,7 @@ fun getWindowTitle(window: DesktopWindow): String {
         DesktopWindow.CODE_EDITOR -> "Rofwin Code"
         DesktopWindow.WINECFG -> "Wine Configuration (winecfg)"
         DesktopWindow.WINETRICKS -> "Winetricks — Windows DLLs & Runtimes"
+        DesktopWindow.AI_CHAT -> "ROC AI — Trading & Code Assistant"
         else -> "Wine Window"
     }
 }
@@ -2389,137 +2735,63 @@ fun SshManagerWindow() {
     }
 }
 @Composable
-fun Mt5Window(lowRam: Boolean, expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>) {
+fun Mt5Window(
+    lowRam: Boolean,
+    mids: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Double>,
+    prevMids: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Double>,
+    candles: androidx.compose.runtime.snapshots.SnapshotStateList<Mt5Candle>,
+    positions: androidx.compose.runtime.snapshots.SnapshotStateList<Mt5Pos>,
+    tradeHistory: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    journalLogs: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    activeEAs: androidx.compose.runtime.snapshots.SnapshotStateMap<String, String>,
+    balance: Float,
+    onBalance: (Float) -> Unit,
+    ticket: Long,
+    onTicket: (Long) -> Unit,
+    expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>
+) {
     val rnd = remember { java.util.Random() }
-
-    // ===== DATA BESAR: 24 simbol (forex, metal, crypto, indeks, oil, IDR) =====
-    val symbolSeeds = listOf(
-        "EURUSD" to 1.09250, "GBPUSD" to 1.27510, "USDJPY" to 145.305, "USDCHF" to 0.88120,
-        "AUDUSD" to 0.66240, "NZDUSD" to 0.59980, "USDCAD" to 1.36150, "EURGBP" to 0.85680,
-        "EURJPY" to 158.720, "GBPJPY" to 185.340, "AUDJPY" to 96.240, "EURAUD" to 1.64850,
-        "GBPAUD" to 1.92430, "USDSGD" to 1.34260, "USDIDR" to 16305.0, "XAUUSD" to 2385.40,
-        "XAGUSD" to 31.240, "BTCUSD" to 97450.0, "ETHUSD" to 3420.0, "US30" to 41250.0,
-        "NAS100" to 18960.0, "SPX500" to 5620.0, "UKOIL" to 82.45, "WTI" to 78.30
-    )
-    val mids = remember { mutableStateMapOf<String, Double>().apply { symbolSeeds.forEach { (k, v) -> put(k, v) } } }
-    val prevMids = remember { mutableStateMapOf<String, Double>().apply { symbolSeeds.forEach { (k, v) -> put(k, v) } } }
-
-    fun digitsOf(sym: String) = when {
-        sym.endsWith("JPY") -> 3
-        sym == "USDIDR" -> 0
-        sym == "XAUUSD" || sym == "XAGUSD" || sym == "UKOIL" || sym == "WTI" || sym == "ETHUSD" -> 2
-        sym == "BTCUSD" || sym == "US30" || sym == "NAS100" || sym == "SPX500" -> 1
-        else -> 5
-    }
-    fun fmt(sym: String, v: Double) = "%.${digitsOf(sym)}f".format(v)
-    fun spreadOf(sym: String) = when {
-        sym.endsWith("JPY") -> 0.015; sym == "USDIDR" -> 8.0
-        sym == "XAUUSD" -> 0.35; sym == "XAGUSD" -> 0.025
-        sym == "BTCUSD" -> 25.0; sym == "ETHUSD" -> 2.0
-        sym == "US30" || sym == "NAS100" -> 2.0; sym == "SPX500" -> 0.6
-        sym == "UKOIL" || sym == "WTI" -> 0.04
-        else -> 0.00015
-    }
-    // Faktor profit per satuan harga (USD) — sim
-    fun pnlFactor(sym: String) = when {
-        sym.endsWith("JPY") -> 1000.0; sym == "USDIDR" -> 0.01
-        sym == "XAUUSD" -> 100.0; sym == "XAGUSD" -> 5000.0
-        sym == "BTCUSD" -> 1.0; sym == "ETHUSD" -> 10.0
-        sym == "US30" || sym == "NAS100" || sym == "SPX500" -> 100.0
-        sym == "UKOIL" || sym == "WTI" -> 10.0
-        else -> 100000.0
-    }
-
-    // ===== Chart candlestick (domain 0..100) =====
-    val candles = remember {
-        mutableStateListOf<Mt5Candle>().apply {
-            var v = 50f
-            repeat(60) {
-                val o = v
-                v = (v + (rnd.nextFloat() - 0.48f) * 4f).coerceIn(5f, 95f)
-                val c = v
-                val h = maxOf(o, c) + rnd.nextFloat() * 1.5f
-                val l = minOf(o, c) - rnd.nextFloat() * 1.5f
-                add(Mt5Candle(o, h, l, c))
-            }
-        }
-    }
     var chartSymbol by remember { mutableStateOf("EURUSD") }
     var timeframe by remember { mutableStateOf("H1") }
-
-    // ===== Trading state (live P/L dihitung dari mids) =====
-    val positions = remember { mutableStateListOf<Mt5Pos>() }
-    val tradeHistory = remember { mutableStateListOf<String>() }
-    val journalLogs = remember { mutableStateListOf("Rofwin MT5 sim terminal ready — feed lokal 24 simbol") }
-    val activeEAs = remember { mutableStateMapOf<String, String>() }
-    var ticket by remember { mutableStateOf(53000100L) }
-    var balance by remember { mutableFloatStateOf(10000f) }
     var pingMs by remember { mutableStateOf(41) }
     var toolboxTab by remember { mutableStateOf("Trade") }
-    var tickCount by remember { mutableStateOf(0) }
+    var maOn by remember { mutableStateOf(true) }
+    var showOrderDialog by remember { mutableStateOf(false) }
+    var attachFor by remember { mutableStateOf<String?>(null) }
+    // New Order (F9) form state
+    var orderSymIdx by remember { mutableStateOf(0) }
+    var orderLotsIdx by remember { mutableStateOf(0) }
+    var orderSlPips by remember { mutableStateOf("25") }
+    var orderTpPips by remember { mutableStateOf("50") }
+    val lotOptions = listOf(0.01, 0.05, 0.10, 0.50)
+
+    // heartbeat ping lokal
+    LaunchedEffect(lowRam) {
+        while (true) { delay(if (lowRam) 3000L else 1500L); pingMs = 30 + rnd.nextInt(60) }
+    }
 
     fun pnlOf(p: Mt5Pos): Double {
         val mid = mids[p.sym] ?: p.open
         val delta = if (p.buy) (mid - p.open) else (p.open - mid)
-        return delta * p.lots * pnlFactor(p.sym)
+        return delta * p.lots * mt5PnlFactor(p.sym)
     }
     fun closePos(p: Mt5Pos, reason: String) {
         val pnl = pnlOf(p)
         positions.remove(p)
-        balance += pnl.toFloat()
+        onBalance(balance + pnl.toFloat())
         val side = if (p.buy) "buy" else "sell"
-        tradeHistory.add(0, "#${p.ticket} $side ${p.lots} ${p.sym} @ ${fmt(p.sym, p.open)} → P/L ${"%.2f".format(pnl)} USD ($reason)")
+        tradeHistory.add(0, "#${p.ticket} $side ${p.lots} ${p.sym} @ ${mt5Fmt(p.sym, p.open)} → P/L ${"%.2f".format(pnl)} USD ($reason)")
         journalLogs.add(0, "close #${p.ticket} $side ${p.sym} profit ${"%.2f".format(pnl)} [$reason]")
-        if (tradeHistory.size > 60) tradeHistory.removeLast()
-        if (journalLogs.size > 120) journalLogs.removeLast()
     }
-    fun openPos(buy: Boolean, sym: String, lots: Double, reason: String) {
+    fun openPos(buy: Boolean, sym: String, lots: Double, reason: String, slPips: Int = 0, tpPips: Int = 0) {
         val mid = mids[sym] ?: return
-        val px = if (buy) mid + spreadOf(sym) else mid
-        positions.add(Mt5Pos(ticket++, buy, sym, lots, px))
-        journalLogs.add(0, "open #${ticket - 1} ${if (buy) "buy" else "sell"} $lots $sym @ ${fmt(sym, px)} [$reason]")
-        if (journalLogs.size > 120) journalLogs.removeLast()
-    }
-
-    // ===== Live tick engine: harga + candle + EA auto-trade =====
-    LaunchedEffect(lowRam) {
-        while (true) {
-            delay(if (lowRam) 2200L else 800L)
-            tickCount++
-            mids.keys.toList().forEach { s ->
-                val old = mids[s] ?: 1.0
-                prevMids[s] = old
-                val vol = when {
-                    s == "BTCUSD" || s == "ETHUSD" || s == "US30" || s == "NAS100" || s == "SPX500" -> 0.0012
-                    s == "XAUUSD" -> 0.0007
-                    else -> 0.0004
-                }
-                mids[s] = (old * (1.0 + (rnd.nextFloat() - 0.5f) * 2f * vol.toFloat()))
-            }
-            // candle update
-            if (candles.isNotEmpty()) {
-                val last = candles.last()
-                val drift = (rnd.nextFloat() - 0.48f) * 3f
-                last.c = (last.c + drift).coerceIn(5f, 95f)
-                if (last.c > last.h) last.h = last.c
-                if (last.c < last.l) last.l = last.c
-                val o = last.c
-                if (tickCount % 4 == 0) {
-                    candles.removeAt(0)
-                    candles.add(Mt5Candle(o, o + 0.5f, o - 0.5f, o))
-                }
-            }
-            // EA auto-trade (attach dari Navigator)
-            activeEAs.forEach { (ea, sym) ->
-                val r = rnd.nextFloat()
-                if (r < 0.05f) {
-                    openPos(rnd.nextBoolean(), sym, 0.01, "EA $ea")
-                } else if (r < 0.085f) {
-                    positions.firstOrNull { it.sym == sym }?.let { closePos(it, "EA $ea") }
-                }
-            }
-            pingMs = 30 + rnd.nextInt(60)
-        }
+        val px = if (buy) mid + mt5SpreadOf(sym) else mid
+        val pip = if (sym.endsWith("JPY")) 0.01 else 0.0001
+        val sl = if (slPips > 0) (if (buy) px - slPips * pip else px + slPips * pip) else 0.0
+        val tp = if (tpPips > 0) (if (buy) px + tpPips * pip else px - tpPips * pip) else 0.0
+        positions.add(Mt5Pos(ticket, buy, sym, lots, px, sl, tp))
+        journalLogs.add(0, "open #$ticket ${if (buy) "buy" else "sell"} $lots $sym @ ${mt5Fmt(sym, px)}" + (if (sl > 0) " sl ${mt5Fmt(sym, sl)}" else "") + (if (tp > 0) " tp ${mt5Fmt(sym, tp)}" else "") + " [$reason]")
+        onTicket(ticket + 1)
     }
 
     val floating: Float = positions.sumOf { pnlOf(it) }.toFloat()
@@ -2533,29 +2805,48 @@ fun Mt5Window(lowRam: Boolean, expertAdvisors: androidx.compose.runtime.snapshot
                 Text(it, color = Color(0xFFBBBBBB), fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp))
             }
         }
-        // Toolbar: timeframe + status
-        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF242424)).padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Toolbar: timeframe + F9 + indikator + status
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF242424)).padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf("M1", "M5", "M15", "H1", "H4", "D1").forEach { tf ->
                 Text(
                     tf,
                     color = if (tf == timeframe) Color(0xFF4CAF50) else Color(0xFF999999),
                     fontSize = 10.sp,
                     fontWeight = if (tf == timeframe) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable { timeframe = tf }.padding(horizontal = 6.dp, vertical = 4.dp)
+                    modifier = Modifier.clickable { timeframe = tf }.padding(horizontal = 5.dp, vertical = 4.dp)
                 )
             }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                "F9",
+                color = Color.White,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(Color(0xFF1E5AA8), RoundedCornerShape(3.dp))
+                    .clickable { orderSymIdx = mids.keys.indexOf(chartSymbol).coerceAtLeast(0); showOrderDialog = true }
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                "MA",
+                color = if (maOn) Color(0xFF4CC2FF) else Color(0xFF777777),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { maOn = !maOn }.padding(horizontal = 4.dp, vertical = 3.dp)
+            )
             Spacer(modifier = Modifier.weight(1f))
-            Text("Demo 12345678 — Rofwin-Demo Server", color = Color(0xFF88CC88), fontSize = 10.sp)
+            Text("Demo 12345678", color = Color(0xFF88CC88), fontSize = 9.sp)
         }
 
         Row(modifier = Modifier.weight(1f)) {
             // ===== Kolom kiri: Market Watch + Navigator =====
-            Column(modifier = Modifier.width(150.dp).fillMaxHeight().border(1.dp, Color(0xFF333333))) {
-                Column(modifier = Modifier.weight(1f).padding(6.dp)) {
-                    Text("Market Watch", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.width(132.dp).fillMaxHeight().border(1.dp, Color(0xFF333333))) {
+                Column(modifier = Modifier.weight(1f).padding(5.dp)) {
+                    Text("Market Watch", color = Color.LightGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Symbol", color = Color.Gray, fontSize = 9.sp)
-                        Text("Bid / Ask", color = Color.Gray, fontSize = 9.sp)
+                        Text("Symbol", color = Color.Gray, fontSize = 8.sp)
+                        Text("Bid / Ask", color = Color.Gray, fontSize = 8.sp)
                     }
                     LazyColumn {
                         items(mids.keys.toList()) { s ->
@@ -2567,56 +2858,55 @@ fun Mt5Window(lowRam: Boolean, expertAdvisors: androidx.compose.runtime.snapshot
                                     .fillMaxWidth()
                                     .clickable { chartSymbol = s }
                                     .background(if (s == chartSymbol) Color(0xFF173A17) else Color.Transparent)
-                                    .padding(vertical = 3.dp)
+                                    .padding(vertical = 2.dp)
                             ) {
-                                Text(s, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("${fmt(s, mid)}   ${fmt(s, mid + spreadOf(s))}", color = c, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                Text(s, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("${mt5Fmt(s, mid)}   ${mt5Fmt(s, mid + mt5SpreadOf(s))}", color = c, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
                             }
                         }
                     }
                 }
-                // ===== Navigator: Accounts + Expert Advisors (Attach → auto-trade) =====
+                // ===== Navigator =====
                 Divider(color = Color(0xFF444444))
-                Column(modifier = Modifier.height(120.dp).padding(6.dp)) {
-                    Text("Navigator", color = Color.LightGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    Text("▸ Accounts — 12345678 (Demo)", color = Color(0xFFAAAAAA), fontSize = 8.sp)
-                    Text("▸ Indicators — 12 built-in", color = Color(0xFFAAAAAA), fontSize = 8.sp)
+                Column(modifier = Modifier.height(112.dp).padding(5.dp)) {
+                    Text("Navigator", color = Color.LightGray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text("▸ Accounts — 12345678 (Demo, 1:500)", color = Color(0xFFAAAAAA), fontSize = 8.sp)
+                    Text("▸ Indicators — MA7/MA21 " + if (maOn) "ON" else "OFF", color = Color(0xFFAAAAAA), fontSize = 8.sp)
                     Text("▸ Expert Advisors (${expertAdvisors.size})", color = Color(0xFFAAAAAA), fontSize = 8.sp)
                     LazyColumn {
                         if (expertAdvisors.isEmpty()) {
-                            item { Text("   (compile EA di Rofwin Code / MetaEditor)", color = Color(0xFF666666), fontSize = 8.sp) }
-                            items(expertAdvisors) { ea ->
-                                val attached = activeEAs.containsKey(ea)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
-                                ) {
-                                    Icon(Icons.Default.SmartToy, contentDescription = null, tint = if (attached) Color(0xFF4CAF50) else Color(0xFF999999), modifier = Modifier.size(10.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(ea, color = Color.White, fontSize = 8.sp, modifier = Modifier.weight(1f), maxLines = 1)
-                                    Text(
-                                        if (attached) "Detach" else "Attach",
-                                        color = if (attached) Color(0xFFEF5350) else Color(0xFF4CAF50),
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.clickable {
-                                            if (attached) {
-                                                activeEAs.remove(ea)
-                                                journalLogs.add(0, "EA $ea detached")
-                                            } else {
-                                                activeEAs[ea] = chartSymbol
-                                                journalLogs.add(0, "EA $ea attached to $chartSymbol, $timeframe — auto-trade ON")
-                                            }
-                                        }.padding(horizontal = 2.dp)
-                                    )
-                                }
+                            item { Text("   (compile EA di Rofwin Code)", color = Color(0xFF666666), fontSize = 8.sp) }
+                        }
+                        items(expertAdvisors) { ea ->
+                            val attached = activeEAs.containsKey(ea)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
+                            ) {
+                                Icon(Icons.Default.SmartToy, contentDescription = null, tint = if (attached) Color(0xFF4CAF50) else Color(0xFF999999), modifier = Modifier.size(10.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(ea, color = Color.White, fontSize = 8.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                                Text(
+                                    if (attached) "Detach" else "Attach",
+                                    color = if (attached) Color(0xFFEF5350) else Color(0xFF4CAF50),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable {
+                                        if (attached) {
+                                            activeEAs.remove(ea)
+                                            journalLogs.add(0, "EA $ea detached")
+                                        } else {
+                                            attachFor = ea
+                                        }
+                                    }.padding(horizontal = 2.dp)
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // ===== Chart Area: candlestick (view) + Sell/Buy one-click =====
+            // ===== Chart Area: candlestick + MA overlay =====
             Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.Black)) {
                 Canvas(modifier = Modifier.fillMaxSize().padding(top = 30.dp, bottom = 8.dp, start = 8.dp, end = 8.dp)) {
                     val w = size.width; val h = size.height
@@ -2636,34 +2926,50 @@ fun Mt5Window(lowRam: Boolean, expertAdvisors: androidx.compose.runtime.snapshot
                             val bot = y(minOf(cd.o, cd.c))
                             drawRect(col, topLeft = Offset(cx - step * 0.3f, top), size = androidx.compose.ui.geometry.Size(step * 0.6f, (bot - top).coerceAtLeast(2f)))
                         }
+                        if (maOn) {
+                            fun ma(n: Int, end: Int): Float? {
+                                if (end < n) return null
+                                var s = 0f
+                                for (k in end - n until end) s += candles[k].c
+                                return s / n
+                            }
+                            for (i in 7 until candles.size) {
+                                val m7a = ma(7, i); val m7b = ma(7, i + 1)
+                                if (m7a != null && m7b != null) drawLine(Color(0xFF4CC2FF), Offset((i - 1) * step + step / 2f, y(m7a)), Offset(i * step + step / 2f, y(m7b)), strokeWidth = 2f)
+                                if (i >= 21) {
+                                    val m21a = ma(21, i); val m21b = ma(21, i + 1)
+                                    if (m21a != null && m21b != null) drawLine(Color(0xFFFFC107), Offset((i - 1) * step + step / 2f, y(m21a)), Offset(i * step + step / 2f, y(m21b)), strokeWidth = 2f)
+                                }
+                            }
+                        }
                     }
                 }
-                Text("$chartSymbol, $timeframe — ${positions.count { it.sym == chartSymbol }} posisi", color = Color.DarkGray, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
-                // Bid/Ask + Sell/Buy (one-click)
+                Text("$chartSymbol, $timeframe" + if (maOn) "  MA7/21" else "", color = Color.DarkGray, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
+                // Sell / Buy one-click
                 Row(modifier = Modifier.align(Alignment.TopStart).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Button(
                         onClick = { openPos(false, chartSymbol, 0.01, "manual") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E2424)),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                         modifier = Modifier.height(26.dp)
-                    ) { Text("Sell ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}", fontSize = 9.sp) }
+                    ) { Text("Sell ${mt5Fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}", fontSize = 9.sp) }
                     Button(
                         onClick = { openPos(true, chartSymbol, 0.01, "manual") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E5AA8)),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                         modifier = Modifier.height(26.dp)
-                    ) { Text("Buy ${fmt(chartSymbol, (mids[chartSymbol] ?: 1.0) + spreadOf(chartSymbol))}", fontSize = 9.sp) }
+                    ) { Text("Buy ${mt5Fmt(chartSymbol, (mids[chartSymbol] ?: 1.0) + mt5SpreadOf(chartSymbol))}", fontSize = 9.sp) }
                 }
                 Text(
-                    "Bid ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}",
+                    "Bid ${mt5Fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}",
                     color = Color(0xFF4CAF50), fontSize = 11.sp, fontFamily = FontFamily.Monospace,
                     modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
                 )
             }
         }
 
-        // ===== Toolbox: Trade | History | News | Journal (tab hidup) =====
-        Column(modifier = Modifier.fillMaxWidth().height(128.dp).border(1.dp, Color(0xFF333333)).padding(6.dp)) {
+        // ===== Toolbox: Trade | History | News | Journal =====
+        Column(modifier = Modifier.fillMaxWidth().height(126.dp).border(1.dp, Color(0xFF333333)).padding(5.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 listOf("Trade", "History", "News", "Journal").forEach { t ->
                     Text(
@@ -2676,62 +2982,55 @@ fun Mt5Window(lowRam: Boolean, expertAdvisors: androidx.compose.runtime.snapshot
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 if (toolboxTab == "Trade" && positions.isNotEmpty()) {
-                    Text(
-                        "Close All",
-                        color = Color(0xFFEF5350),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { positions.toList().forEach { closePos(it, "close all") } }.padding(horizontal = 4.dp)
-                    )
+                    Text("Close All", color = Color(0xFFEF5350), fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { positions.toList().forEach { closePos(it, "close all") } }.padding(horizontal = 4.dp))
                 }
             }
             Spacer(modifier = Modifier.height(2.dp))
             LazyColumn(modifier = Modifier.weight(1f)) {
                 when {
                     toolboxTab == "Trade" && positions.isEmpty() ->
-                        item { Text("no open positions — Sell/Buy satu klik, atau attach EA di Navigator", color = Color.Gray, fontSize = 10.sp) }
+                        item { Text("no open positions — F9 order, Sell/Buy satu klik, atau attach EA", color = Color.Gray, fontSize = 9.sp) }
                     toolboxTab == "Trade" -> {
                         item {
                             Row(modifier = Modifier.fillMaxWidth()) {
-                                Text("Ticket / Side", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(1.4f))
-                                Text("Lots", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(0.6f))
-                                Text("Open", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(1f))
-                                Text("P/L (USD)", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(1f))
-                                Text("", modifier = Modifier.width(20.dp))
+                                Text("Ticket/Side", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(1.3f))
+                                Text("Lots", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(0.5f))
+                                Text("Open", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(0.9f))
+                                Text("P/L $", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(0.8f))
+                                Text("", modifier = Modifier.width(16.dp))
                             }
                         }
                         items(positions) { p ->
                             val pnl = pnlOf(p)
                             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("#${p.ticket} ${if (p.buy) "buy" else "sell"} ${p.sym}", color = if (p.buy) Color(0xFF66BB6A) else Color(0xFFEF5350), fontSize = 9.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1.4f))
-                                Text("${p.lots}", color = Color.White, fontSize = 9.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(0.6f))
-                                Text(fmt(p.sym, p.open), color = Color.White, fontSize = 9.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                                Text("${"%.2f".format(pnl)}", color = if (pnl >= 0) Color(0xFF4CAF50) else Color(0xFFEF5350), fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                                Text("✕", color = Color.Gray, fontSize = 9.sp, modifier = Modifier.width(20.dp).clickable { closePos(p, "manual close") })
+                                Text("#${p.ticket} ${if (p.buy) "buy" else "sell"} ${p.sym}" + (if (p.sl > 0 || p.tp > 0) " (sl/tp)" else ""), color = if (p.buy) Color(0xFF66BB6A) else Color(0xFFEF5350), fontSize = 8.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1.3f), maxLines = 1)
+                                Text("${p.lots}", color = Color.White, fontSize = 8.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(0.5f))
+                                Text(mt5Fmt(p.sym, p.open), color = Color.White, fontSize = 8.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(0.9f))
+                                Text("${"%.2f".format(pnl)}", color = if (pnl >= 0) Color(0xFF4CAF50) else Color(0xFFEF5350), fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(0.8f))
+                                Text("✕", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.width(16.dp).clickable { closePos(p, "manual close") })
                             }
                         }
                     }
                     toolboxTab == "History" && tradeHistory.isEmpty() ->
                         item { Text("belum ada closed trade", color = Color.Gray, fontSize = 10.sp) }
                     toolboxTab == "History" ->
-                        items(tradeHistory) { h -> Text(h, color = Color(0xFFD0D0D0), fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                        items(tradeHistory) { hTxt -> Text(hTxt, color = Color(0xFFD0D0D0), fontSize = 8.sp, fontFamily = FontFamily.Monospace) }
                     toolboxTab == "News" -> {
                         items(listOf(
                             "04:00  USD  Fed holds rates; DXY flat",
                             "03:15  XAU  Gold tests 2385 resistance",
                             "01:40  BTC  ETF inflows +$210M hari ini",
                             "23:05  JPY  BoJ: kebijakan tetap longgar"
-                        )) { n -> Text(n, color = Color(0xFFB0B0B0), fontSize = 9.sp) }
+                        )) { n -> Text(n, color = Color(0xFFB0B0B0), fontSize = 8.sp) }
                     }
-                    else -> items(journalLogs) { j -> Text(j, color = Color(0xFF9CCC9C), fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                    else -> items(journalLogs) { j -> Text(j, color = Color(0xFF9CCC9C), fontSize = 8.sp, fontFamily = FontFamily.Monospace) }
                 }
             }
-            // Footer akun (live)
             val marginUsed = positions.sumOf { it.lots * 130 }.toFloat()
             Text(
-                "Balance: ${"%.2f".format(balance)}  Equity: ${"%.2f".format(balance + floating)}  Margin: ${"%.2f".format(marginUsed)}  Free: ${"%.2f".format(balance + floating - marginUsed)}  Level: ${if (marginUsed > 0f) "%.0f".format((balance + floating) / marginUsed * 100) else "∞"}%",
+                "Bal: ${"%.2f".format(balance)}  Eq: ${"%.2f".format(balance + floating)}  Mgn: ${"%.2f".format(marginUsed)}  Free: ${"%.2f".format(balance + floating - marginUsed)}" + (if (marginUsed > 0f) "  Lvl: ${"%.0f".format((balance + floating) / marginUsed * 100)}%" else ""),
                 color = if (floating >= 0) Color(0xFF4CAF50) else Color(0xFFEF5350),
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -2739,11 +3038,94 @@ fun Mt5Window(lowRam: Boolean, expertAdvisors: androidx.compose.runtime.snapshot
         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Circle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(8.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Connected  |  $pingMs ms  |  ${activeEAs.size} EA aktif  |  Rofwin Wine DDE (feed simulasi lokal)", color = Color(0xFF999999), fontSize = 9.sp)
+            Text("Connected | $pingMs ms | ${activeEAs.size} EA aktif | bot jalan walau jendela ditutup", color = Color(0xFF999999), fontSize = 8.sp)
         }
     }
-}
 
+    // ===== Dialog New Order (F9) — symbol, lot, SL/TP dalam pip =====
+    if (showOrderDialog) {
+        val syms = mids.keys.toList()
+        val sym = syms.getOrElse(orderSymIdx) { "EURUSD" }
+        AlertDialog(
+            onDismissRequest = { showOrderDialog = false },
+            title = { Text("New Order (F9)", fontSize = 14.sp) },
+            text = {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Symbol:", color = Color.White, fontSize = 12.sp, modifier = Modifier.width(56.dp))
+                        Text("‹", color = Win11Accent, fontSize = 18.sp, modifier = Modifier.clickable { orderSymIdx = (orderSymIdx - 1 + syms.size) % syms.size }.padding(6.dp))
+                        Text(sym, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text("›", color = Win11Accent, fontSize = 18.sp, modifier = Modifier.clickable { orderSymIdx = (orderSymIdx + 1) % syms.size }.padding(6.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Volume:", color = Color.White, fontSize = 12.sp, modifier = Modifier.width(56.dp))
+                        lotOptions.forEachIndexed { i, l ->
+                            Text(
+                                "$l",
+                                color = if (i == orderLotsIdx) Color.Black else Color.White,
+                                fontSize = 10.sp,
+                                modifier = Modifier
+                                    .padding(2.dp)
+                                    .background(if (i == orderLotsIdx) Win11Accent else Color(0xFF3A3A3A), RoundedCornerShape(3.dp))
+                                    .clickable { orderLotsIdx = i }
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("SL (pip):", color = Color.White, fontSize = 12.sp, modifier = Modifier.width(72.dp))
+                        OutlinedTextField(value = orderSlPips, onValueChange = { orderSlPips = it.filter { c -> c.isDigit() } }, singleLine = true, modifier = Modifier.width(80.dp).height(44.dp), textStyle = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("TP:", color = Color.White, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        OutlinedTextField(value = orderTpPips, onValueChange = { orderTpPips = it.filter { c -> c.isDigit() } }, singleLine = true, modifier = Modifier.width(80.dp).height(44.dp), textStyle = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace))
+                    }
+                    Text("(0 = tanpa SL/TP; auto-close dicek tiap tick)", color = TextSecondary, fontSize = 9.sp)
+                }
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = {
+                        openPos(false, sym, lotOptions[orderLotsIdx], "F9 order", orderSlPips.toIntOrNull() ?: 0, orderTpPips.toIntOrNull() ?: 0)
+                        showOrderDialog = false
+                    }) { Text("Sell by Market", color = Color(0xFFEF5350)) }
+                    TextButton(onClick = {
+                        openPos(true, sym, lotOptions[orderLotsIdx], "F9 order", orderSlPips.toIntOrNull() ?: 0, orderTpPips.toIntOrNull() ?: 0)
+                        showOrderDialog = false
+                    }) { Text("Buy by Market", color = Color(0xFF66BB6A)) }
+                }
+            },
+            dismissButton = { TextButton(onClick = { showOrderDialog = false }) { Text("Batal") } }
+        )
+    }
+
+    // ===== Dialog Attach EA — pilih simbol chart target =====
+    attachFor?.let { ea ->
+        val syms = mids.keys.toList()
+        var eaSymIdx by remember(ea) { mutableStateOf(syms.indexOf(chartSymbol).coerceAtLeast(0)) }
+        AlertDialog(
+            onDismissRequest = { attachFor = null },
+            title = { Text("Attach EA: $ea", fontSize = 14.sp) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Chart:", color = Color.White, fontSize = 12.sp, modifier = Modifier.width(50.dp))
+                    Text("‹", color = Win11Accent, fontSize = 18.sp, modifier = Modifier.clickable { eaSymIdx = (eaSymIdx - 1 + syms.size) % syms.size }.padding(6.dp))
+                    Text(syms.getOrElse(eaSymIdx) { "EURUSD" }, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("›", color = Win11Accent, fontSize = 18.sp, modifier = Modifier.clickable { eaSymIdx = (eaSymIdx + 1) % syms.size }.padding(6.dp))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = syms.getOrElse(eaSymIdx) { "EURUSD" }
+                    activeEAs[ea] = target
+                    journalLogs.add(0, "EA $ea attached to $target, $timeframe — auto-trade ON (lots 0.01)")
+                    attachFor = null
+                }) { Text("OK — jalankan bot") }
+            },
+            dismissButton = { TextButton(onClick = { attachFor = null }) { Text("Batal") } }
+        )
+    }
+}
 @Composable
 fun Mql5EditorWindow() {
     var code by remember {
@@ -3546,5 +3928,475 @@ fun WinetricksWindow() {
             }
         }
         Text("Paket terinstall menandai container (lihat winecfg).", color = TextSecondary, fontSize = 9.sp)
+    }
+}
+
+// =====================================================================
+// ROC AI — asisten trading & coding.
+// ONLINE: tempel API key Groq/OpenAI-compatible (disimpan LOKAL di HP,
+// tidak pernah ditulis ke source/ log). OFFLINE: otak rule-based lokal.
+// =====================================================================
+@Composable
+fun RocAiWindow(
+    fileContents: androidx.compose.runtime.snapshots.SnapshotStateMap<String, String>,
+    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
+    expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    mids: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Double>,
+    positions: androidx.compose.runtime.snapshots.SnapshotStateList<Mt5Pos>,
+    balance: Float,
+    onLaunch: (DesktopWindow) -> Unit
+) {
+    val context = LocalContext.current
+    val aiPrefs = remember { context.getSharedPreferences("RofwinAI", android.content.Context.MODE_PRIVATE) }
+    var apiBase by remember { mutableStateOf(aiPrefs.getString("base", "https://api.groq.com/openai/v1") ?: "https://api.groq.com/openai/v1") }
+    var apiKey by remember { mutableStateOf(aiPrefs.getString("key", "") ?: "") }
+    var model by remember { mutableStateOf(aiPrefs.getString("model", "llama-3.3-70b-versatile") ?: "llama-3.3-70b-versatile") }
+    var showSettings by remember { mutableStateOf(false) }
+    val chat = remember {
+        mutableStateListOf<Pair<Boolean, String>>().apply {
+            add(false to "Halo! Saya ROC-AI 🤖 — asisten coding & bot trading Anda.\n• ONLINE: tempel API key di ⚙ Settings (Groq/OpenAI-compatible)\n• OFFLINE: tetap menjawab via otak lokal (analisis momentum, template EA)\nCoba tombol cepat di bawah.")
+        }
+    }
+    var input by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun pushUser(t: String) { chat.add(true to t) }
+    fun pushBot(t: String) { chat.add(false to t); if (chat.size > 120) chat.removeAt(0) }
+
+    fun marketDigest(): String {
+        val top = listOf("EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "BTCUSD", "USDIDR")
+        val px = top.joinToString(" ") { s -> "$s=${mt5Fmt(s, mids[s] ?: 0.0)}" }
+        val pos = if (positions.isEmpty()) "tanpa posisi" else positions.joinToString(" ") { p -> "${if (p.buy) "BUY" else "SELL"}_${p.lots}_${p.sym}" }
+        return "balance=${"%.2f".format(balance)} | $px | $pos | EA compiled=${expertAdvisors.size}"
+    }
+
+    fun momentumOf(sym: String): Double {
+        val base = MT5_BASELINE[sym] ?: return 0.0
+        val now = mids[sym] ?: base
+        return (now - base) / base * 100.0
+    }
+
+    fun offlineBrain(promptRaw: String): String {
+        val prompt = promptRaw.lowercase()
+        return when {
+            "analisis" in prompt || "market" in prompt || "sinyal" in prompt -> {
+                val watch = listOf("EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "BTCUSD", "USDIDR")
+                val sb = StringBuilder("📊 Analisis momentum lokal (vs baseline):\n")
+                watch.forEach { s ->
+                    val m = momentumOf(s)
+                    val arrow = if (m > 0.02) "▲" else if (m < -0.02) "▼" else "◆"
+                    sb.append("$arrow $s ${"%+.3f".format(m)}% @ ${mt5Fmt(s, mids[s] ?: 0.0)}\n")
+                }
+                val best = watch.maxByOrNull { momentumOf(it) } ?: "EURUSD"
+                val worst = watch.minByOrNull { momentumOf(it) } ?: "GBPUSD"
+                sb.append("➜ Terkuat: $best (bias BUY) · Terlemah: $worst (bias SELL).\n")
+                if (positions.isNotEmpty()) sb.append("⚠ ${positions.size} posisi terbuka — pertimbangkan trailing SL.")
+                else sb.append("Tidak ada posisi — momentum-scalp 0.01 lot cocok.")
+                sb.toString()
+            }
+            "ea" in prompt || "bot" in prompt || "expert" in prompt ->
+                "🤖 Status EA: ${expertAdvisors.size} terkompilasi" + (if (expertAdvisors.isNotEmpty()) " (${expertAdvisors.joinToString()})" else "") +
+                        ".\nAlur: 1) Rofwin Code → ＋ New 'nama.mq5' 2) ⚙ Compile 3) MT5 → Navigator → Attach.\nKetik: buat ea <nama> <strategi> — saya tuliskan kodenya (online: AI sungguhan, offline: template MA-cross)."
+            "sync" in prompt || "rocagents" in prompt ->
+                "🔄 Tekan tombol 'Sync rocagents' di bawah — saya tarik struktur terbaru dari GitHub ivansslo/rocagents ke D:\\Work\\rocagents dan perbarui README. Selalu sinkron setiap repo Anda berubah."
+            "compile" in prompt ->
+                "⚙ Compiler lokal memeriksa keseimbangan kurung + nama file .mq5. EA terdaftar: ${expertAdvisors.size}. Error umum: '{' - unbalanced parentheses → hitung { dan }."
+            "help" in prompt || prompt.isBlank() ->
+                "Perintah saya:\n• 'analisis market'\n• 'buat ea <nama> <strategi>'\n• 'status ea'\n• 'sync rocagents'\n• bebas bertanya (online mode dengan key)"
+            else -> "🤖 (offline) Terima: '$promptRaw'. Dengan API key di ⚙ Settings saya menjawab penuh via ${model}. Market kini: ${marketDigest()}"
+        }
+    }
+
+    fun makeEa(rawName: String, desc: String, viaTemplate: Boolean) {
+        val safe = rawName.replace(Regex("[^A-Za-z0-9_]"), "_").ifBlank { "EA_AI" }
+        val path = "D:\\Work\\$safe.mq5"
+        if (viaTemplate) {
+            fileContents[path] = AI_EA_TEMPLATE.replace("MA Cross Scalper", "$safe — $desc")
+            SimFileAdd(null, simulatedFiles, "D:\\Work", "$safe.mq5")
+            pushBot("✔ EA '$safe' dibuat (template lokal MA-cross).\nBuka Rofwin Code → Compile ⚙ → MT5 attach.")
+            onLaunch(DesktopWindow.CODE_EDITOR)
+        }
+    }
+
+    fun callOnline(userText: String, isEaGen: Boolean, eaName: String) {
+        busy = true
+        val systemPrompt = if (isEaGen)
+            "Anda generator kode MQL5. Balas HANYA kode .mq5 valid (OnInit/OnTick), tanpa penjelasan, tanpa markdown fence. Strategi: $userText"
+        else "Kamu ROC-AI, asisten aplikasi Rofwin (Android Windows 11 sim). Jawab ringkas & teknis dalam Bahasa Indonesia. Konteks live: ${marketDigest()}"
+        val body = "{\"model\":${jsonStr(model)},\"temperature\":0.3,\"max_tokens\":${if (isEaGen) "900" else "500"},\"messages\":[" +
+                "{\"role\":\"system\",\"content\":${jsonStr(systemPrompt)}}," +
+                "{\"role\":\"user\",\"content\":${jsonStr(userText)}}]}"
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val (code, resp) = httpPostJson("$apiBase/chat/completions", apiKey, body)
+            val content = try {
+                kotlinx.serialization.json.Json.parseToJsonElement(resp).jsonObject["choices"]!!.jsonArray[0].jsonObject["message"]!!.jsonObject["content"]!!.jsonPrimitive.content
+            } catch (_: Exception) { null }
+            if (isEaGen && code == 200 && content != null) {
+                val clean = content.replace("```mql5", "").replace("```", "").trim()
+                val safe = eaName.replace(Regex("[^A-Za-z0-9_]"), "_").ifBlank { "EA_AI" }
+                val path = "D:\\Work\\$safe.mq5"
+                fileContents[path] = clean + "\n"
+                SimFileAdd(null, simulatedFiles, "D:\\Work", "$safe.mq5")
+                pushBot("✔ EA '$safe' ditulis oleh AI (${clean.lines().size} baris) → tersimpan di $path.\nBuka Rofwin Code → Compile ⚙.")
+            } else {
+                pushBot(
+                    when {
+                        code == 200 && content != null -> content
+                        code == -1 -> "⚠ Tidak ada koneksi. Mode offline:\n" + offlineBrain(userText)
+                        else -> "⚠ API error $code (key/model?). Offline fallback:\n" + offlineBrain(userText)
+                    }
+                )
+            }
+            busy = false
+        }
+    }
+
+    fun send(raw: String) {
+        val t = raw.trim()
+        if (t.isEmpty()) return
+        pushUser(t)
+        input = ""
+        val lower = t.lowercase()
+        when {
+            lower.startsWith("buat ea ") -> {
+                val rest = t.substring(8).trim()
+                val parts = rest.split(" ", limit = 2)
+                val name = parts.getOrElse(0) { "EA_AI" }
+                val desc = parts.getOrElse(1) { "strategi umum" }
+                if (apiKey.isBlank()) {
+                    pushBot("🔌 OFFLINE — membangun dari template lokal...")
+                    makeEa(name, desc, true)
+                } else {
+                    pushBot("🌐 Menulis EA '$name' via AI ($model)...")
+                    callOnline("nama:$name; strategi:$desc", true, name)
+                }
+            }
+            lower == "analisis" || lower.startsWith("analisis") ->
+                if (apiKey.isBlank()) pushBot(offlineBrain(t)) else callOnline("Analisis market sim sekarang & saran posisi saya", false, "")
+            lower.startsWith("sync") -> pushBot("🔄 Gunakan tombol Sync di bawah (menarik tree GitHub penuh).")
+            apiKey.isBlank() -> pushBot(offlineBrain(t))
+            else -> callOnline(t, false, "")
+        }
+    }
+
+    fun syncRocAgents() {
+        busy = true
+        pushBot("🔄 Sync ivansslo/rocagents dari GitHub…")
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val (code, body) = httpGet("https://api.github.com/repos/ivansslo/rocagents/git/trees/HEAD?recursive=1")
+            var added = 0
+            if (code == 200) {
+                try {
+                    val arr = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject["tree"]!!.jsonArray
+                    // bangun peta folder → entries (tanpa sessions/ dan __pycache__)
+                    val folders = mutableMapOf<String, MutableList<SimFile>>()
+                    arr.forEach { el ->
+                        val o = el.jsonObject
+                        val p = o["path"]!!.jsonPrimitive.content
+                        if (!p.contains("__pycache__") && !p.startsWith("sessions/")) {
+                            val isDir = o["type"]!!.jsonPrimitive.content == "tree"
+                            val parent = p.substringBeforeLast('/', "")
+                            val name = p.substringAfterLast('/')
+                            folders.getOrPut(parent) { mutableListOf() }.add(SimFile(name, isDir, if (isDir) "Folder" else "3 KB"))
+                            if (isDir) folders.getOrPut(p) { mutableListOf() }
+                        }
+                    }
+                    folders.forEach { (parent, list) ->
+                        val key = "D:\\Work\\rocagents" + (if (parent.isEmpty()) "" else "\\" + parent.replace('/', '\\'))
+                        val existing = simulatedFiles[key] ?: emptyList()
+                        val newcomers = list.filter { nf -> existing.none { it.name == nf.name } }
+                        if (existing.isEmpty() && !simulatedFiles.containsKey(key)) {
+                            simulatedFiles[key] = list
+                            added += list.size
+                        } else if (newcomers.isNotEmpty()) {
+                            simulatedFiles[key] = existing + newcomers
+                            added += newcomers.size
+                        }
+                    }
+                    // perbarui README juga
+                    val (rc, rb) = httpGet("https://raw.githubusercontent.com/ivansslo/rocagents/HEAD/README.md")
+                    if (rc == 200) fileContents["D:\\Work\\rocagents\\README.md"] = rb.take(4000)
+                } catch (e: Exception) {
+                    pushBot("⚠ parse tree gagal: ${e.message}")
+                }
+            }
+            pushBot(if (code == 200) "✔ Sync selesai: +$added entri baru di D:\\Work\\rocagents + README terbaru (HEAD)." else "⚠ Sync gagal (http $code) — cek koneksi.")
+            busy = false
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF141A22))) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF1B2330)).padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.SmartToy, null, tint = Win11Accent, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("ROC-AI", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (apiKey.isBlank()) "OFFLINE mode (otak lokal)" else "ONLINE — $model",
+                    color = if (apiKey.isBlank()) Color(0xFFFFB74D) else Color(0xFF4CAF50),
+                    fontSize = 9.sp
+                )
+            }
+            if (busy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Win11Accent)
+            IconButton(onClick = { showSettings = !showSettings }, modifier = Modifier.size(26.dp)) {
+                Icon(Icons.Default.Settings, "Settings", tint = Color(0xFFCCCCCC), modifier = Modifier.size(15.dp))
+            }
+        }
+
+        // Settings (key disimpan LOKAL di prefs HP — tidak pernah ke source/log)
+        if (showSettings) {
+            Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1B2330)).padding(8.dp)) {
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it; aiPrefs.edit().putString("key", it).apply() },
+                    label = { Text("API Key (Groq: gsk_... / OpenAI-compatible)", fontSize = 10.sp) },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row {
+                    OutlinedTextField(
+                        value = model,
+                        onValueChange = { model = it; aiPrefs.edit().putString("model", it).apply() },
+                        label = { Text("Model", fontSize = 10.sp) }, singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = apiBase,
+                        onValueChange = { apiBase = it; aiPrefs.edit().putString("base", it).apply() },
+                        label = { Text("Base URL", fontSize = 10.sp) }, singleLine = true,
+                        modifier = Modifier.weight(1.4f)
+                    )
+                }
+                Text("Key tersimpan hanya di HP Anda (SharedPreferences). Untuk Groq gratis: console.groq.com → API Keys.", color = TextSecondary, fontSize = 8.sp)
+            }
+        }
+
+        // Quick actions
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(4.dp)) {
+            listOf(
+                "📊 Analisis market" to { send("analisis market") },
+                "🤖 Buat EA…" to { send("buat ea EA_AI scalp MA7-21") },
+                "🔄 Sync rocagents" to { syncRocAgents() },
+                "📈 Status posisi" to { pushBot("📈 " + marketDigest()) },
+                "🧪 Cek compile" to { pushBot(offlineBrain("compile")) }
+            ).forEach { (label, act) ->
+                Text(
+                    label,
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    modifier = Modifier
+                        .padding(3.dp)
+                        .background(Color(0xFF243040), RoundedCornerShape(12.dp))
+                        .clickable(enabled = !busy) { act() }
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                )
+            }
+        }
+
+        // Chat
+        LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            items(chat) { (isUser, text) ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp),
+                    horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(0.92f)
+                            .background(
+                                if (isUser) Color(0xFF274B73) else Color(0xFF1F2937),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .padding(8.dp)
+                    ) {
+                        Text(text, color = Color(0xFFE8E8E8), fontSize = 11.sp, lineHeight = 15.sp)
+                    }
+                }
+            }
+        }
+
+        // Input
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF1B2330)).padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = input,
+                onValueChange = { input = it },
+                placeholder = { Text("tanya / 'buat ea <nama> <strategi>'…", fontSize = 10.sp) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                textStyle = TextStyle(fontSize = 11.sp, color = Color.White),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { send(input) })
+            )
+            IconButton(onClick = { send(input) }, enabled = !busy) {
+                Icon(Icons.Default.Send, "Kirim", tint = if (busy) Color.Gray else Win11Accent)
+            }
+        }
+    }
+}
+
+// =====================================================================
+// Git Bash + rocd multi-OS (Ubuntu/Debian/Alpine/Fedora/Arch containers)
+// =====================================================================
+@Composable
+fun GitBashWindow(simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>) {
+    val logs = remember { mutableStateListOf("MINGW64 Git Bash + rocd multi-OS — ketik 'help'") }
+    var input by remember { mutableStateOf("") }
+    // Multi-OS containers (rocd): true = running
+    val containers = remember {
+        mutableStateMapOf(
+            "ubuntu-22.04" to true, "debian-12" to false, "alpine-3.20" to false,
+            "fedora-40" to false, "archlinux" to false
+        )
+    }
+    var currentOs by remember { mutableStateOf<String?>(null) }
+
+    fun run(raw: String) {
+        val t = raw.trim()
+        if (t.isEmpty()) return
+        logs.add(if (currentOs != null) "root@$currentOs:/# $t" else "$ $t")
+        val parts = t.split(" ").filter { it.isNotBlank() }
+        val c0 = parts.getOrElse(0) { "" }
+        val c1 = parts.getOrElse(1) { "" }
+        val c2 = parts.getOrElse(2) { "" }
+        when {
+            // ---- rocd multi-OS (dari repo ivansslo/rocd) ----
+            t == "rocd" || t == "rocd help" -> {
+                logs.add("rocd — ROC Distro (container manager)")
+                logs.add("  rocd list | rocd ps          daftar OS")
+                logs.add("  rocd create <os> <nama>      buat (ubuntu/debian/alpine/fedora/arch)")
+                logs.add("  rocd start|stop <nama>       hidup/matikan")
+                logs.add("  rocd enter <nama>            masuk shell OS")
+                logs.add("  rocd remove <nama>           hapus container")
+                logs.add("  exit                         keluar container")
+            }
+            t == "rocd list" || t == "rocd ps" -> {
+                logs.add("NAME            STATUS      DISTRO")
+                containers.forEach { (n, running) ->
+                    logs.add("${n.padEnd(16)}${(if (running) "running" else "stopped").padEnd(12)}${n.substringBefore('-')}")
+                }
+            }
+            t.startsWith("rocd create ") -> {
+                val newName = if (c2.isNotBlank()) "$c0-$c2".replace("rocd-", "") else "ubuntu-${(containers.size + 20)}"
+                val os = c2.ifBlank { c1 }
+                if (os !in listOf("ubuntu", "debian", "alpine", "fedora", "arch")) {
+                    logs.add("rocd: distro '$os' tidak dikenal (pilih: ubuntu/debian/alpine/fedora/arch)")
+                } else {
+                    val name = "$os-${100 + containers.size}"
+                    containers[name] = false
+                    logs.add("rocd: pulling $os:latest rootfs… done (sim)")
+                    logs.add("rocd: container '$name' created. 'rocd start $name' untuk menjalankan.")
+                }
+            }
+            t.startsWith("rocd start ") -> {
+                val n = t.removePrefix("rocd start ").trim()
+                if (containers.containsKey(n)) { containers[n] = true; logs.add("rocd: '$n' started (udocker)") } else logs.add("rocd: '$n' tidak ada")
+            }
+            t.startsWith("rocd stop ") -> {
+                val n = t.removePrefix("rocd stop ").trim()
+                if (containers.containsKey(n)) { containers[n] = false; if (currentOs == n) currentOs = null; logs.add("rocd: '$n' stopped") } else logs.add("rocd: '$n' tidak ada")
+            }
+            t.startsWith("rocd enter ") || t.startsWith("rocd login ") -> {
+                val n = t.split(" ").last()
+                if (containers[n] == true) {
+                    currentOs = n
+                    logs.add("root@$n:~# (selamat datang di $n — 'exit' untuk keluar)")
+                } else if (containers.containsKey(n)) {
+                    logs.add("rocd: '$n' sedang stopped — 'rocd start $n' dulu")
+                } else logs.add("rocd: '$n' tidak ada (lihat 'rocd list')")
+            }
+            t.startsWith("rocd remove ") -> {
+                val n = t.removePrefix("rocd remove ").trim()
+                if (containers.containsKey(n)) { if (currentOs == n) currentOs = null; containers.remove(n); logs.add("rocd: '$n' removed") } else logs.add("rocd: '$n' tidak ada")
+            }
+            t == "exit" && currentOs != null -> {
+                logs.add("logout $currentOs")
+                currentOs = null
+            }
+
+            // ---- git clone rocagents (menanam struktur nyata jika belum ada) ----
+            t.startsWith("git clone") && t.contains("rocagents") -> {
+                if (simulatedFiles.containsKey("D:\\Work\\rocagents")) {
+                    logs.add("rocagents already cloned — 'Already up to date.' (HEAD)")
+                } else {
+                    logs.add("Cloning into 'D:\\Work\\rocagents'…")
+                    logs.add("remote: Enumerating objects: 57, done.")
+                    seedRocAgentsFs().forEach { (k, v) -> simulatedFiles[k] = v }
+                    val list = simulatedFiles["D:\\Work"]?.toMutableList() ?: mutableListOf()
+                    if (list.none { it.name == "rocagents" }) { list.add(SimFile("rocagents", true)); simulatedFiles["D:\\Work"] = list }
+                    logs.add("done. 57 objects — cek File Explorer / 'ls D:\\Work\\rocagents' di Terminal")
+                }
+            }
+
+            t == "help" -> {
+                logs.add("git: status log branch | clone https://github.com/ivansslo/rocagents")
+                logs.add("rocd: list create start stop enter remove (multi-OS)")
+                logs.add("umum: ls pwd uname clear (mengikuti OS aktif)")
+            }
+            t == "git status" -> { logs.add("On branch main"); logs.add("nothing to commit, working tree clean") }
+            t == "git log" || t == "git log --oneline" -> {
+                logs.add("3b5aabb (HEAD -> main, tag: v1.5.0) feat: Coder & Trader Edition")
+                logs.add("fce5ff3 (tag: v1.4.0) feat: Windows 11 Edition")
+            }
+            t == "git branch" -> logs.add("* main")
+            t == "ls" -> {
+                if (currentOs != null) logs.add("bin  etc  home  root  usr  var")
+                else logs.add("app/  rocd/  rocagents/  README.md  build.gradle.kts")
+            }
+            t == "pwd" -> logs.add(if (currentOs != null) "/root" else "/c/rofwin")
+            t == "uname -a" -> {
+                logs.add(
+                    when (currentOs) {
+                        null -> "Linux CPH1823 6.6.30-android15-8-g #1 SMP aarch64 GNU/Linux"
+                        "alpine-3.20" -> "Linux alpine-3-20 6.6.30 #1-Alpine SMP x86_64 Linux"
+                        else -> "Linux $currentOs 6.8.0-45-generic #45-Ubuntu SMP x86_64 GNU/Linux"
+                    }
+                )
+            }
+            t == "clear" -> logs.clear()
+            else -> logs.add("${if (currentOs != null) "bash" else "bash"}: $t: command not found")
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)).padding(8.dp)) {
+        Text(
+            if (currentOs != null) "rocd ▶ $currentOs (running)" else "ivansslo@CPH1823 MINGW64 /c/rofwin",
+            color = if (currentOs != null) Color(0xFF4CC2FF) else Color(0xFFADFF2F),
+            fontSize = 11.sp, fontFamily = FontFamily.Monospace
+        )
+        if (currentOs == null) {
+            Text("containers: ${containers.count { it.value }} running / ${containers.size} total — 'rocd list'", color = Color(0xFF888888), fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(logs) { Text(it, color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (currentOs != null) "/# " else "$ ", color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            BasicTextField(
+                value = input,
+                onValueChange = { input = it },
+                textStyle = TextStyle(color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                modifier = Modifier.fillMaxWidth(),
+                cursorBrush = SolidColor(Color.White),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = {
+                    run(input)
+                    input = ""
+                })
+            )
+        }
     }
 }
