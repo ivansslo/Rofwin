@@ -1,6 +1,7 @@
 package com.winlator
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.animation.AnimatedVisibility
@@ -134,8 +135,102 @@ fun evalPy(expr: String): Double? = PyParser(expr).parse()
 
 // Window Type
 enum class DesktopWindow {
-    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER, MT5, MQL5_EDITOR
+    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER, MT5, MQL5_EDITOR, CODE_EDITOR, WINECFG, WINETRICKS
 }
+
+// Posisi trading MT5 (live P/L dihitung dari harga sim)
+data class Mt5Pos(val ticket: Long, val buy: Boolean, val sym: String, val lots: Double, val open: Double)
+
+// Candle untuk chart MT5
+data class Mt5Candle(val o: Float, var h: Float, var l: Float, var c: Float)
+
+// Struktur repo ivansslo/rocagents (HEAD, 57 entries) — ditanam ke FS aplikasi
+fun seedRocAgentsFs(): Map<String, List<SimFile>> = mapOf(
+    "D:\\Work\\rocagents" to listOf(
+        SimFile("bin", true), SimFile("dashboard", true), SimFile("oci", true),
+        SimFile("server", true), SimFile("sessions", true), SimFile("src", true),
+        SimFile(".env.example", false, "1 KB"), SimFile(".gitignore", false, "1 KB"),
+        SimFile("README.md", false, "6 KB"), SimFile("agent_install.sh", false, "2 KB"),
+        SimFile("bun.lock", false, "210 KB"), SimFile("db.json", false, "3 KB"),
+        SimFile("hermes", false, "96 KB"), SimFile("hermes_install.sh", false, "4 KB"),
+        SimFile("index.html", false, "1 KB"), SimFile("install.sh", false, "3 KB"),
+        SimFile("metadata.json", false, "1 KB"), SimFile("nous_agent.sh", false, "2 KB"),
+        SimFile("nous_hermes_agent_install.sh", false, "3 KB"),
+        SimFile("package-lock.json", false, "450 KB"), SimFile("package.json", false, "2 KB"),
+        SimFile("patch-roc-agentsroute.sh", false, "2 KB"), SimFile("proot_install.sh", false, "3 KB"),
+        SimFile("server.ts", false, "8 KB"), SimFile("termux-create-new-codespace.sh", false, "2 KB"),
+        SimFile("termux-login-codespace.sh", false, "1 KB"), SimFile("termux-open-codespace-localhost.sh", false, "1 KB"),
+        SimFile("tsconfig.json", false, "1 KB"), SimFile("vite.config.ts", false, "1 KB")
+    ),
+    "D:\\Work\\rocagents\\bin" to listOf(SimFile("codex", false, "44 KB")),
+    "D:\\Work\\rocagents\\dashboard" to listOf(SimFile("firebase.json", false, "1 KB"), SimFile("index.html", false, "2 KB")),
+    "D:\\Work\\rocagents\\oci" to listOf(
+        SimFile("install_oci_cli.sh", false, "3 KB"), SimFile("private-model-install.sh", false, "2 KB"),
+        SimFile("setup-cf-tunnel.sh", false, "3 KB"), SimFile("setup-oci-rdp.sh", false, "4 KB")
+    ),
+    "D:\\Work\\rocagents\\server" to listOf(
+        SimFile("db.ts", false, "5 KB"), SimFile("orchestrator.ts", false, "11 KB"),
+        SimFile("scheduler.ts", false, "6 KB"), SimFile("tools.ts", false, "9 KB")
+    ),
+    "D:\\Work\\rocagents\\sessions" to emptyList(),
+    "D:\\Work\\rocagents\\src" to listOf(
+        SimFile("components", true), SimFile("App.tsx", false, "7 KB"), SimFile("index.css", false, "2 KB"),
+        SimFile("main.tsx", false, "1 KB"), SimFile("types.ts", false, "2 KB")
+    ),
+    "D:\\Work\\rocagents\\src\\components" to listOf(
+        SimFile("AppsSyncedManager.tsx", false, "4 KB"), SimFile("ChatInput.tsx", false, "3 KB"),
+        SimFile("ChatMessage.tsx", false, "4 KB"), SimFile("ExecutionHistoryModal.tsx", false, "3 KB"),
+        SimFile("FileArchive.tsx", false, "5 KB"), SimFile("LiveTerminal.tsx", false, "6 KB"),
+        SimFile("SyncDashboard.tsx", false, "5 KB"), SimFile("UpgradePanel.tsx", false, "3 KB")
+    )
+)
+
+const val ROCAGENTS_README = """# ROCAgents — Unified Hermes AI Agent CLI & Web UI
+Version 5.14.0 (Oracle)
+
+Hermes Agent CLI + Local DevAgent Orchestrator Web UI
+stack: Express + Vite + React 19 + Gemini API.
+
+Quick start:
+  git clone https://github.com/ivansslo/rocagents.git
+  npm install
+  npm run webui
+
+Folders:
+  server/   orchestrator, scheduler, tools, db (Express)
+  src/      React 19 front-end: LiveTerminal, SyncDashboard,
+            ChatInput/ChatMessage, FileArchive, UpgradePanel
+  oci/      Oracle Cloud installer scripts
+  bin/      codex launcher
+  dashboard firebase host config
+"""
+
+const val DEFAULT_EXPERT_MQ5 = """//+------------------------------------------------------------------+
+//|                                                      Expert.mq5 |
+//|                                      Copyright 2026, MetaQuotes |
+//|                                             https://www.mql5.com |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2026"
+#property link      "https://www.mql5.com"
+#property version   "1.00"
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+  {
+   Print("Rofwin EA activated!");
+   return(INIT_SUCCEEDED);
+  }
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+  {
+   // strategi di sini
+  }
+"""
 
 data class SimFile(val name: String, val isDirectory: Boolean = false, val size: String = "1 KB")
 
@@ -196,6 +291,7 @@ fun WineDesktopSim(
                     "C:\\" to listOf(
                         SimFile("Windows", true),
                         SimFile("Program Files", true),
+                        SimFile("MQL5", true),
                         SimFile("users", true),
                         SimFile("boot.ini", false, "256 B")
                     ),
@@ -232,10 +328,24 @@ fun WineDesktopSim(
                         SimFile("Downloads", true)
                     ),
                     "D:\\Work" to listOf(
+                        SimFile("rocagents", true),
                         SimFile("script.py", false, "2 KB"),
                         SimFile("backup.rar", false, "15 MB"),
                         SimFile("notes.txt", false, "1 KB")
                     ),
+                    // Struktur MQL5 (EA hasil Compile mendarat di sini)
+                    "C:\\MQL5" to listOf(
+                        SimFile("Experts", true),
+                        SimFile("Include", true),
+                        SimFile("Scripts", true)
+                    ),
+                    "C:\\MQL5\\Experts" to listOf(
+                        SimFile("Expert.mq5", false, "2 KB")
+                    ),
+                    "C:\\MQL5\\Include" to listOf(
+                        SimFile("Trade.mqh", false, "18 KB")
+                    ),
+                    "C:\\MQL5\\Scripts" to emptyList(),
                     "D:\\Downloads" to listOf(
                         SimFile("winetricks.exe", false, "3 MB"),
                         SimFile("python-3.12.exe", false, "25 MB"),
@@ -256,6 +366,23 @@ fun WineDesktopSim(
             )
         }
     }
+    // Tanam repo ivansslo/rocagents (struktur asli GitHub HEAD)
+    LaunchedEffect(Unit) {
+        if (!simulatedFiles.containsKey("D:\\Work\\rocagents")) {
+            seedRocAgentsFs().forEach { (k, v) -> simulatedFiles[k] = v }
+        }
+    }
+
+    // Isi file untuk Rofwin Code (editor) — Save menulis ke sini + FS
+    val fileContents = remember {
+        mutableStateMapOf(
+            "C:\\MQL5\\Experts\\Expert.mq5" to DEFAULT_EXPERT_MQ5,
+            "D:\\Work\\rocagents\\README.md" to ROCAGENTS_README,
+            "D:\\Work\\script.py" to "# Rofwin script\nprint('halo dari python')\nprint(72/5+3*(9-4))\nprint(2**10)\n"
+        )
+    }
+    // EA yang terkompilasi (MQL5) — terbaca MT5 Navigator, bisa di-attach
+    val expertAdvisors = remember { mutableStateListOf<String>() }
 
     var newFileName by remember { mutableStateOf("") }
     var fileTypeFolder by remember { mutableStateOf(false) }
@@ -407,13 +534,14 @@ fun WineDesktopSim(
                     android.util.Log.d("Rofwin", "Auto-saving container ${container.name} state to storage...")
                 }
             }
-            // Desktop Icon Grid
+            // Desktop Icon Grid (scroll agar tidak overflow di layar kecil)
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(120.dp)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .width(100.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 DesktopIconButton(
                     name = "My Computer",
@@ -424,6 +552,11 @@ fun WineDesktopSim(
                     name = "Web Browser",
                     icon = Icons.Default.Language,
                     onClick = { openWin(DesktopWindow.BROWSER) }
+                )
+                DesktopIconButton(
+                    name = "Rofwin Code",
+                    icon = Icons.Default.Code,
+                    onClick = { openWin(DesktopWindow.CODE_EDITOR) }
                 )
                 DesktopIconButton(
                     name = "Git Bash",
@@ -485,10 +618,13 @@ fun WineDesktopSim(
                     ) {
                         val quickTools = listOf(
                             Triple("MT5", Icons.Default.TrendingUp, DesktopWindow.MT5),
-                            Triple("MQL5", Icons.Default.Code, DesktopWindow.MQL5_EDITOR),
+                            Triple("Code", Icons.Default.Code, DesktopWindow.CODE_EDITOR),
                             Triple("PS1", Icons.Default.Terminal, DesktopWindow.COMMAND_PROMPT),
-                            Triple("EXE", Icons.Default.PlayCircle, DesktopWindow.COMMAND_PROMPT),
+                            Triple("Wine", Icons.Default.Settings, DesktopWindow.WINECFG),
+                            Triple("Tricks", Icons.Default.Handyman, DesktopWindow.WINETRICKS),
+                            Triple("WSL", Icons.Default.Terminal, DesktopWindow.GIT_BASH),
                             Triple("Web", Icons.Default.Language, DesktopWindow.BROWSER),
+                            Triple("Python", Icons.Default.PlayCircle, DesktopWindow.PYTHON_SHELL),
                             Triple("Folder", Icons.Default.Folder, DesktopWindow.MY_COMPUTER)
                         )
                         items(quickTools) { (name, icon, win) ->
@@ -1028,10 +1164,30 @@ fun WineDesktopSim(
                                     SshManagerWindow()
                                 }
                                 DesktopWindow.MT5 -> {
-                                    Mt5Window(lowRam = lowRamMode)
+                                    Mt5Window(lowRam = lowRamMode, expertAdvisors = expertAdvisors)
                                 }
                                 DesktopWindow.MQL5_EDITOR -> {
-                                    Mql5EditorWindow()
+                                    // MQL5 Editor kini = Rofwin Code yang langsung membuka Expert.mq5
+                                    CodeEditorWindow(
+                                        fileContents = fileContents,
+                                        simulatedFiles = simulatedFiles,
+                                        expertAdvisors = expertAdvisors,
+                                        initialPath = "C:\\MQL5\\Experts\\Expert.mq5"
+                                    )
+                                }
+                                DesktopWindow.CODE_EDITOR -> {
+                                    CodeEditorWindow(
+                                        fileContents = fileContents,
+                                        simulatedFiles = simulatedFiles,
+                                        expertAdvisors = expertAdvisors,
+                                        initialPath = null
+                                    )
+                                }
+                                DesktopWindow.WINECFG -> {
+                                    WineCfgWindow()
+                                }
+                                DesktopWindow.WINETRICKS -> {
+                                    WinetricksWindow()
                                 }
                                 DesktopWindow.BROWSER -> {
                                     BrowserWindow()
@@ -1073,28 +1229,31 @@ fun WineDesktopSim(
                 }
             }
 
-            // ===== Windows 11 Taskbar (terpusat) =====
-            Row(
+            // ===== Windows 11 Taskbar (terpusat ABSOLUT — 1.5.0) =====
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
                     .background(Win11Taskbar)
                     .align(Alignment.BottomCenter)
-                    .border(width = (0.5).dp, color = Win11Stroke),
-                verticalAlignment = Alignment.CenterVertically
+                    .border(width = (0.5).dp, color = Win11Stroke)
             ) {
-                // Kiri: Widgets (cuaca + berita)
-                IconButton(onClick = {
-                    widgetsOpen = !widgetsOpen
-                    qsOpen = false; notifOpen = false; startMenuOpen = false
-                }) {
-                    Icon(Icons.Default.WbSunny, contentDescription = "Widgets", tint = Color(0xFF6EB5FF), modifier = Modifier.size(20.dp))
+                // Kiri: Widgets — absolute start
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = {
+                        widgetsOpen = !widgetsOpen
+                        qsOpen = false; notifOpen = false; startMenuOpen = false
+                    }) {
+                        Icon(Icons.Default.WbSunny, contentDescription = "Widgets", tint = Color(0xFF6EB5FF), modifier = Modifier.size(20.dp))
+                    }
                 }
 
-                // Tengah: Start + pinned + aplikasi berjalan (dengan indikator garis bawah)
+                // Tengah: Start + pinned + running — absolute center (rapi ala Win11)
                 Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.align(Alignment.Center),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -1113,9 +1272,9 @@ fun WineDesktopSim(
                     val pinned = listOf(
                         DesktopWindow.MY_COMPUTER,
                         DesktopWindow.BROWSER,
+                        DesktopWindow.CODE_EDITOR,
                         DesktopWindow.COMMAND_PROMPT,
                         DesktopWindow.MT5,
-                        DesktopWindow.MQL5_EDITOR,
                         DesktopWindow.TASK_MANAGER
                     )
                     val running = listOfNotNull(openWindow.takeIf { it != DesktopWindow.NONE }) + minimizedWindows
@@ -1163,8 +1322,11 @@ fun WineDesktopSim(
                     }
                 }
 
-                // Kanan: chevron, Quick Settings, jam hidup, notifikasi (gaya Windows 11)
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Kanan: tray — absolute end
+                Row(
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Show hidden icons", tint = Color(0xFFB0B0B0), modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Row(
@@ -1365,7 +1527,10 @@ fun WineDesktopSim(
                     StartApp("Google Chrome", Icons.Default.Language, DesktopWindow.BROWSER),
                     StartApp("Terminal", Icons.Default.Terminal, DesktopWindow.COMMAND_PROMPT),
                     StartApp("MetaTrader 5", Icons.Default.TrendingUp, DesktopWindow.MT5),
+                    StartApp("Rofwin Code", Icons.Default.Code, DesktopWindow.CODE_EDITOR),
                     StartApp("MetaEditor (MQL5)", Icons.Default.Code, DesktopWindow.MQL5_EDITOR),
+                    StartApp("Wine Config", Icons.Default.Settings, DesktopWindow.WINECFG),
+                    StartApp("Winetricks", Icons.Default.Handyman, DesktopWindow.WINETRICKS),
                     StartApp("Python 3.12", Icons.Default.Code, DesktopWindow.PYTHON_SHELL),
                     StartApp("Git Bash", Icons.Default.Terminal, DesktopWindow.GIT_BASH),
                     StartApp("SSH Manager", Icons.Default.CloudSync, DesktopWindow.SSH_MANAGER),
@@ -1633,6 +1798,9 @@ fun getWindowIcon(window: DesktopWindow): ImageVector {
         DesktopWindow.SSH_MANAGER -> Icons.Default.CloudSync
         DesktopWindow.MT5 -> Icons.Default.TrendingUp
         DesktopWindow.MQL5_EDITOR -> Icons.Default.Code
+        DesktopWindow.CODE_EDITOR -> Icons.Default.Code
+        DesktopWindow.WINECFG -> Icons.Default.Settings
+        DesktopWindow.WINETRICKS -> Icons.Default.Handyman
         else -> Icons.Default.Laptop
     }
 }
@@ -1650,8 +1818,11 @@ fun getWindowTitle(window: DesktopWindow): String {
         DesktopWindow.WINRAR -> "WinRAR (Unregistered Evaluation Copy)"
         DesktopWindow.PYTHON_SHELL -> "Python 3.12.1 Shell"
         DesktopWindow.SSH_MANAGER -> "SSH Connection Manager"
-        DesktopWindow.MT5 -> "MetaTrader 5"
-        DesktopWindow.MQL5_EDITOR -> "MetaQuotes Language 5 Editor"
+        DesktopWindow.MT5 -> "MetaTrader 5 — Rofwin Demo"
+        DesktopWindow.MQL5_EDITOR -> "MetaEditor — Expert.mq5"
+        DesktopWindow.CODE_EDITOR -> "Rofwin Code"
+        DesktopWindow.WINECFG -> "Wine Configuration (winecfg)"
+        DesktopWindow.WINETRICKS -> "Winetricks — Windows DLLs & Runtimes"
         else -> "Wine Window"
     }
 }
@@ -2218,61 +2389,143 @@ fun SshManagerWindow() {
     }
 }
 @Composable
-fun Mt5Window(lowRam: Boolean) {
+fun Mt5Window(lowRam: Boolean, expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>) {
     val rnd = remember { java.util.Random() }
-    // Symbol mid-prices (feed simulasi lokal — BUKAN koneksi broker sungguhan)
-    val mids = remember {
-        mutableStateMapOf(
-            "EURUSD" to 1.09250, "GBPUSD" to 1.27510, "USDJPY" to 145.305,
-            "USDCHF" to 0.88120, "AUDUSD" to 0.66240, "XAUUSD" to 2385.40, "BTCUSD" to 97450.0
-        )
-    }
-    val prevMids = remember { mutableStateMapOf<String, Double>().apply { mids.forEach { (k, v) -> put(k, v) } } }
-    var chartSymbol by remember { mutableStateOf("EURUSD") }
-    var timeframe by remember { mutableStateOf("H1") }
-    val series = remember {
-        mutableStateListOf<Float>().apply {
-            var v = 50f
-            repeat(80) { add(v); v = (v + (rnd.nextFloat() - 0.48f) * 6f).coerceIn(5f, 95f) }
-        }
-    }
-    val trades = remember { mutableStateListOf<String>() }
-    var ticket by remember { mutableStateOf(53000100) }
-    var balance by remember { mutableFloatStateOf(10000f) }
-    var floatingPnl by remember { mutableFloatStateOf(0f) }
-    var pingMs by remember { mutableStateOf(41) }
 
-    fun digits(sym: String) = when (sym) {
-        "USDJPY" -> 3
-        "XAUUSD" -> 2
-        "BTCUSD" -> 1
+    // ===== DATA BESAR: 24 simbol (forex, metal, crypto, indeks, oil, IDR) =====
+    val symbolSeeds = listOf(
+        "EURUSD" to 1.09250, "GBPUSD" to 1.27510, "USDJPY" to 145.305, "USDCHF" to 0.88120,
+        "AUDUSD" to 0.66240, "NZDUSD" to 0.59980, "USDCAD" to 1.36150, "EURGBP" to 0.85680,
+        "EURJPY" to 158.720, "GBPJPY" to 185.340, "AUDJPY" to 96.240, "EURAUD" to 1.64850,
+        "GBPAUD" to 1.92430, "USDSGD" to 1.34260, "USDIDR" to 16305.0, "XAUUSD" to 2385.40,
+        "XAGUSD" to 31.240, "BTCUSD" to 97450.0, "ETHUSD" to 3420.0, "US30" to 41250.0,
+        "NAS100" to 18960.0, "SPX500" to 5620.0, "UKOIL" to 82.45, "WTI" to 78.30
+    )
+    val mids = remember { mutableStateMapOf<String, Double>().apply { symbolSeeds.forEach { (k, v) -> put(k, v) } } }
+    val prevMids = remember { mutableStateMapOf<String, Double>().apply { symbolSeeds.forEach { (k, v) -> put(k, v) } } }
+
+    fun digitsOf(sym: String) = when {
+        sym.endsWith("JPY") -> 3
+        sym == "USDIDR" -> 0
+        sym == "XAUUSD" || sym == "XAGUSD" || sym == "UKOIL" || sym == "WTI" || sym == "ETHUSD" -> 2
+        sym == "BTCUSD" || sym == "US30" || sym == "NAS100" || sym == "SPX500" -> 1
         else -> 5
     }
-    fun fmt(sym: String, v: Double) = "%.${digits(sym)}f".format(v)
-    fun spread(sym: String) = when (sym) {
-        "USDJPY" -> 0.015; "XAUUSD" -> 0.35; "BTCUSD" -> 25.0; else -> 0.00015
+    fun fmt(sym: String, v: Double) = "%.${digitsOf(sym)}f".format(v)
+    fun spreadOf(sym: String) = when {
+        sym.endsWith("JPY") -> 0.015; sym == "USDIDR" -> 8.0
+        sym == "XAUUSD" -> 0.35; sym == "XAGUSD" -> 0.025
+        sym == "BTCUSD" -> 25.0; sym == "ETHUSD" -> 2.0
+        sym == "US30" || sym == "NAS100" -> 2.0; sym == "SPX500" -> 0.6
+        sym == "UKOIL" || sym == "WTI" -> 0.04
+        else -> 0.00015
+    }
+    // Faktor profit per satuan harga (USD) — sim
+    fun pnlFactor(sym: String) = when {
+        sym.endsWith("JPY") -> 1000.0; sym == "USDIDR" -> 0.01
+        sym == "XAUUSD" -> 100.0; sym == "XAGUSD" -> 5000.0
+        sym == "BTCUSD" -> 1.0; sym == "ETHUSD" -> 10.0
+        sym == "US30" || sym == "NAS100" || sym == "SPX500" -> 100.0
+        sym == "UKOIL" || sym == "WTI" -> 10.0
+        else -> 100000.0
     }
 
-    // Live tick engine (lebih lambat & hemat saat Low-RAM Mode)
+    // ===== Chart candlestick (domain 0..100) =====
+    val candles = remember {
+        mutableStateListOf<Mt5Candle>().apply {
+            var v = 50f
+            repeat(60) {
+                val o = v
+                v = (v + (rnd.nextFloat() - 0.48f) * 4f).coerceIn(5f, 95f)
+                val c = v
+                val h = maxOf(o, c) + rnd.nextFloat() * 1.5f
+                val l = minOf(o, c) - rnd.nextFloat() * 1.5f
+                add(Mt5Candle(o, h, l, c))
+            }
+        }
+    }
+    var chartSymbol by remember { mutableStateOf("EURUSD") }
+    var timeframe by remember { mutableStateOf("H1") }
+
+    // ===== Trading state (live P/L dihitung dari mids) =====
+    val positions = remember { mutableStateListOf<Mt5Pos>() }
+    val tradeHistory = remember { mutableStateListOf<String>() }
+    val journalLogs = remember { mutableStateListOf("Rofwin MT5 sim terminal ready — feed lokal 24 simbol") }
+    val activeEAs = remember { mutableStateMapOf<String, String>() }
+    var ticket by remember { mutableStateOf(53000100L) }
+    var balance by remember { mutableFloatStateOf(10000f) }
+    var pingMs by remember { mutableStateOf(41) }
+    var toolboxTab by remember { mutableStateOf("Trade") }
+    var tickCount by remember { mutableStateOf(0) }
+
+    fun pnlOf(p: Mt5Pos): Double {
+        val mid = mids[p.sym] ?: p.open
+        val delta = if (p.buy) (mid - p.open) else (p.open - mid)
+        return delta * p.lots * pnlFactor(p.sym)
+    }
+    fun closePos(p: Mt5Pos, reason: String) {
+        val pnl = pnlOf(p)
+        positions.remove(p)
+        balance += pnl.toFloat()
+        val side = if (p.buy) "buy" else "sell"
+        tradeHistory.add(0, "#${p.ticket} $side ${p.lots} ${p.sym} @ ${fmt(p.sym, p.open)} → P/L ${"%.2f".format(pnl)} USD ($reason)")
+        journalLogs.add(0, "close #${p.ticket} $side ${p.sym} profit ${"%.2f".format(pnl)} [$reason]")
+        if (tradeHistory.size > 60) tradeHistory.removeLast()
+        if (journalLogs.size > 120) journalLogs.removeLast()
+    }
+    fun openPos(buy: Boolean, sym: String, lots: Double, reason: String) {
+        val mid = mids[sym] ?: return
+        val px = if (buy) mid + spreadOf(sym) else mid
+        positions.add(Mt5Pos(ticket++, buy, sym, lots, px))
+        journalLogs.add(0, "open #${ticket - 1} ${if (buy) "buy" else "sell"} $lots $sym @ ${fmt(sym, px)} [$reason]")
+        if (journalLogs.size > 120) journalLogs.removeLast()
+    }
+
+    // ===== Live tick engine: harga + candle + EA auto-trade =====
     LaunchedEffect(lowRam) {
         while (true) {
-            delay(if (lowRam) 2500L else 900L)
+            delay(if (lowRam) 2200L else 800L)
+            tickCount++
             mids.keys.toList().forEach { s ->
                 val old = mids[s] ?: 1.0
                 prevMids[s] = old
-                val vol = if (s == "BTCUSD") 0.0012 else if (s == "XAUUSD") 0.0007 else 0.0004
+                val vol = when {
+                    s == "BTCUSD" || s == "ETHUSD" || s == "US30" || s == "NAS100" || s == "SPX500" -> 0.0012
+                    s == "XAUUSD" -> 0.0007
+                    else -> 0.0004
+                }
                 mids[s] = (old * (1.0 + (rnd.nextFloat() - 0.5f) * 2f * vol.toFloat()))
             }
-            val last = series.last()
-            series.removeAt(0)
-            series.add((last + (rnd.nextFloat() - 0.48f) * 5f).coerceIn(5f, 95f))
-            floatingPnl = ((rnd.nextFloat() - 0.45f) * 120f * trades.size.coerceAtLeast(1)) * if (trades.isEmpty()) 0f else 1f
+            // candle update
+            if (candles.isNotEmpty()) {
+                val last = candles.last()
+                val drift = (rnd.nextFloat() - 0.48f) * 3f
+                last.c = (last.c + drift).coerceIn(5f, 95f)
+                if (last.c > last.h) last.h = last.c
+                if (last.c < last.l) last.l = last.c
+                val o = last.c
+                if (tickCount % 4 == 0) {
+                    candles.removeAt(0)
+                    candles.add(Mt5Candle(o, o + 0.5f, o - 0.5f, o))
+                }
+            }
+            // EA auto-trade (attach dari Navigator)
+            activeEAs.forEach { (ea, sym) ->
+                val r = rnd.nextFloat()
+                if (r < 0.05f) {
+                    openPos(rnd.nextBoolean(), sym, 0.01, "EA $ea")
+                } else if (r < 0.085f) {
+                    positions.firstOrNull { it.sym == sym }?.let { closePos(it, "EA $ea") }
+                }
+            }
             pingMs = 30 + rnd.nextInt(60)
         }
     }
 
+    val floating: Float = positions.sumOf { pnlOf(it) }.toFloat()
+
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2C))) {
-        // Menu bar ala MT5 desktop
+        // Menu bar
         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
@@ -2280,7 +2533,7 @@ fun Mt5Window(lowRam: Boolean) {
                 Text(it, color = Color(0xFFBBBBBB), fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp))
             }
         }
-        // Toolbar: timeframe + simbol chart
+        // Toolbar: timeframe + status
         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF242424)).padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf("M1", "M5", "M15", "H1", "H4", "D1").forEach { tf ->
                 Text(
@@ -2288,9 +2541,7 @@ fun Mt5Window(lowRam: Boolean) {
                     color = if (tf == timeframe) Color(0xFF4CAF50) else Color(0xFF999999),
                     fontSize = 10.sp,
                     fontWeight = if (tf == timeframe) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier
-                        .clickable { timeframe = tf }
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                    modifier = Modifier.clickable { timeframe = tf }.padding(horizontal = 6.dp, vertical = 4.dp)
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
@@ -2298,116 +2549,197 @@ fun Mt5Window(lowRam: Boolean) {
         }
 
         Row(modifier = Modifier.weight(1f)) {
-            // Market Watch (harga bergerak live)
-            Column(modifier = Modifier.width(140.dp).fillMaxHeight().border(1.dp, Color(0xFF333333)).padding(6.dp)) {
-                Text("Market Watch", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Symbol", color = Color.Gray, fontSize = 9.sp)
-                    Text("Bid / Ask", color = Color.Gray, fontSize = 9.sp)
+            // ===== Kolom kiri: Market Watch + Navigator =====
+            Column(modifier = Modifier.width(150.dp).fillMaxHeight().border(1.dp, Color(0xFF333333))) {
+                Column(modifier = Modifier.weight(1f).padding(6.dp)) {
+                    Text("Market Watch", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Symbol", color = Color.Gray, fontSize = 9.sp)
+                        Text("Bid / Ask", color = Color.Gray, fontSize = 9.sp)
+                    }
+                    LazyColumn {
+                        items(mids.keys.toList()) { s ->
+                            val mid = mids[s] ?: 1.0
+                            val up = mid >= (prevMids[s] ?: mid)
+                            val c = if (up) Color(0xFF4CAF50) else Color(0xFFEF5350)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { chartSymbol = s }
+                                    .background(if (s == chartSymbol) Color(0xFF173A17) else Color.Transparent)
+                                    .padding(vertical = 3.dp)
+                            ) {
+                                Text(s, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("${fmt(s, mid)}   ${fmt(s, mid + spreadOf(s))}", color = c, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                LazyColumn {
-                    items(mids.keys.toList()) { s ->
-                        val mid = mids[s] ?: 1.0
-                        val up = mid >= (prevMids[s] ?: mid)
-                        val c = if (up) Color(0xFF4CAF50) else Color(0xFFEF5350)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { chartSymbol = s }
-                                .background(if (s == chartSymbol) Color(0xFF173A17) else Color.Transparent)
-                                .padding(vertical = 3.dp)
-                        ) {
-                            Text(s, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Text("${fmt(s, mid)}   ${fmt(s, mid + spread(s))}", color = c, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                // ===== Navigator: Accounts + Expert Advisors (Attach → auto-trade) =====
+                Divider(color = Color(0xFF444444))
+                Column(modifier = Modifier.height(120.dp).padding(6.dp)) {
+                    Text("Navigator", color = Color.LightGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("▸ Accounts — 12345678 (Demo)", color = Color(0xFFAAAAAA), fontSize = 8.sp)
+                    Text("▸ Indicators — 12 built-in", color = Color(0xFFAAAAAA), fontSize = 8.sp)
+                    Text("▸ Expert Advisors (${expertAdvisors.size})", color = Color(0xFFAAAAAA), fontSize = 8.sp)
+                    LazyColumn {
+                        if (expertAdvisors.isEmpty()) {
+                            item { Text("   (compile EA di Rofwin Code / MetaEditor)", color = Color(0xFF666666), fontSize = 8.sp) }
+                            items(expertAdvisors) { ea ->
+                                val attached = activeEAs.containsKey(ea)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
+                                ) {
+                                    Icon(Icons.Default.SmartToy, contentDescription = null, tint = if (attached) Color(0xFF4CAF50) else Color(0xFF999999), modifier = Modifier.size(10.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(ea, color = Color.White, fontSize = 8.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                                    Text(
+                                        if (attached) "Detach" else "Attach",
+                                        color = if (attached) Color(0xFFEF5350) else Color(0xFF4CAF50),
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.clickable {
+                                            if (attached) {
+                                                activeEAs.remove(ea)
+                                                journalLogs.add(0, "EA $ea detached")
+                                            } else {
+                                                activeEAs[ea] = chartSymbol
+                                                journalLogs.add(0, "EA $ea attached to $chartSymbol, $timeframe — auto-trade ON")
+                                            }
+                                        }.padding(horizontal = 2.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-            // Chart Area (line chart live)
+
+            // ===== Chart Area: candlestick (view) + Sell/Buy one-click =====
             Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.Black)) {
-                Canvas(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+                Canvas(modifier = Modifier.fillMaxSize().padding(top = 30.dp, bottom = 8.dp, start = 8.dp, end = 8.dp)) {
                     val w = size.width; val h = size.height
-                    // grid horizontal
-                    for (i in 1..4) {
-                        drawLine(Color(0xFF1B1B1B), Offset(0f, h * i / 5f), Offset(w, h * i / 5f), strokeWidth = 1f)
-                    }
-                    val step = w / (series.size - 1)
-                    for (i in 0 until series.size - 1) {
-                        val y1 = h - (series[i] / 100f) * h
-                        val y2 = h - (series[i + 1] / 100f) * h
-                        drawLine(
-                            color = if (series[i + 1] >= series[i]) Color(0xFF4CAF50) else Color(0xFFEF5350),
-                            start = Offset(i * step, y1),
-                            end = Offset((i + 1) * step, y2),
-                            strokeWidth = 3f
-                        )
+                    for (i in 1..4) drawLine(Color(0xFF1B1B1B), Offset(0f, h * i / 5f), Offset(w, h * i / 5f), strokeWidth = 1f)
+                    if (candles.size > 1) {
+                        val minP = candles.minOf { it.l }
+                        val maxP = candles.maxOf { it.h }
+                        val span = (maxP - minP).coerceAtLeast(1f)
+                        fun y(p: Float) = h - ((p - minP) / span) * h
+                        val step = w / candles.size
+                        candles.forEachIndexed { i, cd ->
+                            val cx = i * step + step / 2f
+                            val up = cd.c >= cd.o
+                            val col = if (up) Color(0xFF26A69A) else Color(0xFFEF5350)
+                            drawLine(col, Offset(cx, y(cd.l)), Offset(cx, y(cd.h)), strokeWidth = 2f)
+                            val top = y(maxOf(cd.o, cd.c))
+                            val bot = y(minOf(cd.o, cd.c))
+                            drawRect(col, topLeft = Offset(cx - step * 0.3f, top), size = androidx.compose.ui.geometry.Size(step * 0.6f, (bot - top).coerceAtLeast(2f)))
+                        }
                     }
                 }
-                Text(
-                    "$chartSymbol, $timeframe",
-                    color = Color.DarkGray,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-                Text(
-                    "Bid ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}",
-                    color = Color(0xFF4CAF50),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
-                )
-                // Sell / Buy seperti panel one-click MT5
+                Text("$chartSymbol, $timeframe — ${positions.count { it.sym == chartSymbol }} posisi", color = Color.DarkGray, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
+                // Bid/Ask + Sell/Buy (one-click)
                 Row(modifier = Modifier.align(Alignment.TopStart).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Button(
-                        onClick = {
-                            trades.add("#${ticket++} sell 0.01 $chartSymbol @ ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}")
-                        },
+                        onClick = { openPos(false, chartSymbol, 0.01, "manual") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E2424)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        modifier = Modifier.height(28.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(26.dp)
                     ) { Text("Sell ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}", fontSize = 9.sp) }
                     Button(
-                        onClick = {
-                            trades.add("#${ticket++} buy 0.01 $chartSymbol @ ${fmt(chartSymbol, (mids[chartSymbol] ?: 1.0) + spread(chartSymbol))}")
-                        },
+                        onClick = { openPos(true, chartSymbol, 0.01, "manual") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E5AA8)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) { Text("Buy ${fmt(chartSymbol, (mids[chartSymbol] ?: 1.0) + spread(chartSymbol))}", fontSize = 9.sp) }
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(26.dp)
+                    ) { Text("Buy ${fmt(chartSymbol, (mids[chartSymbol] ?: 1.0) + spreadOf(chartSymbol))}", fontSize = 9.sp) }
                 }
+                Text(
+                    "Bid ${fmt(chartSymbol, mids[chartSymbol] ?: 1.0)}",
+                    color = Color(0xFF4CAF50), fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                )
             }
         }
 
-        // Toolbox
-        Column(modifier = Modifier.fillMaxWidth().height(110.dp).border(1.dp, Color(0xFF333333)).padding(6.dp)) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                listOf("Trade", "Exposure", "History", "News", "Mailbox").forEach {
-                    Text(it, color = if (it == "Trade") Color.White else Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 6.dp))
+        // ===== Toolbox: Trade | History | News | Journal (tab hidup) =====
+        Column(modifier = Modifier.fillMaxWidth().height(128.dp).border(1.dp, Color(0xFF333333)).padding(6.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                listOf("Trade", "History", "News", "Journal").forEach { t ->
+                    Text(
+                        t,
+                        color = if (t == toolboxTab) Color.White else Color.Gray,
+                        fontSize = 10.sp,
+                        fontWeight = if (t == toolboxTab) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable { toolboxTab = t }.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (toolboxTab == "Trade" && positions.isNotEmpty()) {
+                    Text(
+                        "Close All",
+                        color = Color(0xFFEF5350),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { positions.toList().forEach { closePos(it, "close all") } }.padding(horizontal = 4.dp)
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(2.dp))
             LazyColumn(modifier = Modifier.weight(1f)) {
-                if (trades.isEmpty()) {
-                    item { Text("no open positions — ketuk Sell/Buy untuk order simulasi", color = Color.Gray, fontSize = 10.sp) }
-                } else {
-                    items(trades) { t -> Text(t, color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+                when {
+                    toolboxTab == "Trade" && positions.isEmpty() ->
+                        item { Text("no open positions — Sell/Buy satu klik, atau attach EA di Navigator", color = Color.Gray, fontSize = 10.sp) }
+                    toolboxTab == "Trade" -> {
+                        item {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Text("Ticket / Side", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(1.4f))
+                                Text("Lots", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(0.6f))
+                                Text("Open", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(1f))
+                                Text("P/L (USD)", color = Color.Gray, fontSize = 8.sp, modifier = Modifier.weight(1f))
+                                Text("", modifier = Modifier.width(20.dp))
+                            }
+                        }
+                        items(positions) { p ->
+                            val pnl = pnlOf(p)
+                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("#${p.ticket} ${if (p.buy) "buy" else "sell"} ${p.sym}", color = if (p.buy) Color(0xFF66BB6A) else Color(0xFFEF5350), fontSize = 9.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1.4f))
+                                Text("${p.lots}", color = Color.White, fontSize = 9.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(0.6f))
+                                Text(fmt(p.sym, p.open), color = Color.White, fontSize = 9.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                                Text("${"%.2f".format(pnl)}", color = if (pnl >= 0) Color(0xFF4CAF50) else Color(0xFFEF5350), fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                                Text("✕", color = Color.Gray, fontSize = 9.sp, modifier = Modifier.width(20.dp).clickable { closePos(p, "manual close") })
+                            }
+                        }
+                    }
+                    toolboxTab == "History" && tradeHistory.isEmpty() ->
+                        item { Text("belum ada closed trade", color = Color.Gray, fontSize = 10.sp) }
+                    toolboxTab == "History" ->
+                        items(tradeHistory) { h -> Text(h, color = Color(0xFFD0D0D0), fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                    toolboxTab == "News" -> {
+                        items(listOf(
+                            "04:00  USD  Fed holds rates; DXY flat",
+                            "03:15  XAU  Gold tests 2385 resistance",
+                            "01:40  BTC  ETF inflows +$210M hari ini",
+                            "23:05  JPY  BoJ: kebijakan tetap longgar"
+                        )) { n -> Text(n, color = Color(0xFFB0B0B0), fontSize = 9.sp) }
+                    }
+                    else -> items(journalLogs) { j -> Text(j, color = Color(0xFF9CCC9C), fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
                 }
             }
+            // Footer akun (live)
+            val marginUsed = positions.sumOf { it.lots * 130 }.toFloat()
             Text(
-                "Balance: ${"%.2f".format(balance)} USD   Equity: ${"%.2f".format(balance + floatingPnl)} USD   Free Margin: ${"%.2f".format(balance + floatingPnl - trades.size * 50f)}",
-                color = if (floatingPnl >= 0) Color(0xFF4CAF50) else Color(0xFFEF5350),
-                fontSize = 11.sp,
+                "Balance: ${"%.2f".format(balance)}  Equity: ${"%.2f".format(balance + floating)}  Margin: ${"%.2f".format(marginUsed)}  Free: ${"%.2f".format(balance + floating - marginUsed)}  Level: ${if (marginUsed > 0f) "%.0f".format((balance + floating) / marginUsed * 100) else "∞"}%",
+                color = if (floating >= 0) Color(0xFF4CAF50) else Color(0xFFEF5350),
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold
             )
         }
-        // Status bar ala MT5
+        // Status bar
         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Circle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(8.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Connected  |  $pingMs ms  |  Rofwin Wine DDE (feed simulasi lokal)", color = Color(0xFF999999), fontSize = 9.sp)
+            Text("Connected  |  $pingMs ms  |  ${activeEAs.size} EA aktif  |  Rofwin Wine DDE (feed simulasi lokal)", color = Color(0xFF999999), fontSize = 9.sp)
         }
     }
 }
@@ -2649,5 +2981,570 @@ fun AiRouteWindow() {
             Spacer(modifier = Modifier.width(8.dp))
             Text("Recalculate AI Path")
         }
+    }
+}
+
+// =====================================================================
+// Rofwin Code — editor coding: multi-tab, autosave, line numbers,
+// Find & Replace, Run (.py), Compile (.mq5 → EA masuk MT5 Navigator)
+// =====================================================================
+@Composable
+fun CodeEditorWindow(
+    fileContents: androidx.compose.runtime.snapshots.SnapshotStateMap<String, String>,
+    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
+    expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    initialPath: String?
+) {
+    val openTabs = remember { mutableStateListOf<String>() }
+    var activeTab by remember { mutableStateOf<String?>(null) }
+    var untitledN by remember { mutableStateOf(1) }
+    val outputLogs = remember { mutableStateListOf("Rofwin Code siap — Open / New file, 💾 autosave") }
+    var findOpen by remember { mutableStateOf(false) }
+    var findText by remember { mutableStateOf("") }
+    var replaceText by remember { mutableStateOf("") }
+    var openDialog by remember { mutableStateOf(false) }
+    var saveAsDialog by remember { mutableStateOf(false) }
+    var saveAsName by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        val start = initialPath ?: "untitled-1"
+        if (initialPath != null && !fileContents.containsKey(initialPath)) fileContents[initialPath] = DEFAULT_EXPERT_MQ5
+        if (initialPath == null && !fileContents.containsKey("untitled-1")) fileContents["untitled-1"] = "// new file — gunakan Save As untuk menamai\n"
+        openTabs.add(start)
+        activeTab = start
+        untitledN = 2
+    }
+
+    fun extOf(p: String) = p.substringAfterLast('.', "").lowercase()
+    fun langOf(p: String) = when (extOf(p)) {
+        "mq5", "mqh" -> "MQL5"; "py" -> "Python"; "ts", "tsx" -> "TypeScript"
+        "json" -> "JSON"; "md" -> "Markdown"; "sh" -> "Shell"; "html" -> "HTML"
+        "css" -> "CSS"; "js" -> "JavaScript"; else -> "Plain Text"
+    }
+
+    // Tulis entri FS (agar file terlihat di File Explorer & Terminal)
+    fun ensureFsEntry(path: String): Boolean {
+        val folder = path.substringBeforeLast('\\', "")
+        val name = path.substringAfterLast('\\')
+        if (folder.isEmpty() || name.isEmpty()) return false
+        if (!simulatedFiles.containsKey(folder)) {
+            val pf = folder.substringBeforeLast('\\', "")
+            val dn = folder.substringAfterLast('\\')
+            if (simulatedFiles.containsKey(pf)) {
+                val pl = simulatedFiles[pf]!!.toMutableList()
+                pl.add(SimFile(dn, true, "Folder"))
+                simulatedFiles[pf] = pl
+                simulatedFiles[folder] = emptyList()
+            } else return false
+        }
+        val list = simulatedFiles[folder]!!.toMutableList()
+        val sizeKb = ((fileContents[path]?.length ?: 0) / 1024 + 1)
+        val idx = list.indexOfFirst { it.name == name }
+        if (idx >= 0) list[idx] = SimFile(name, false, "$sizeKb KB") else list.add(SimFile(name, false, "$sizeKb KB"))
+        simulatedFiles[folder] = list
+        return true
+    }
+
+    fun openPath(p: String) {
+        if (!fileContents.containsKey(p)) {
+            fileContents[p] = "// $p\n// (kerangka — isi belum ada di simulasi)\n"
+        }
+        if (!openTabs.contains(p)) openTabs.add(p)
+        activeTab = p
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) {
+        // ===== Tab bar =====
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF252526)).horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            openTabs.forEach { t ->
+                val active = t == activeTab
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(if (active) Color(0xFF1E1E1E) else Color(0xFF2D2D2D))
+                        .clickable { activeTab = t }
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Text(t.substringAfterLast('\\'), color = if (active) Color.White else Color(0xFFAAAAAA), fontSize = 10.sp, maxLines = 1)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("✕", color = Color(0xFF888888), fontSize = 9.sp, modifier = Modifier.clickable {
+                        openTabs.remove(t)
+                        if (activeTab == t) activeTab = openTabs.lastOrNull()
+                    })
+                }
+            }
+            Icon(Icons.Default.Add, contentDescription = "New file", tint = Color(0xFFAAAAAA), modifier = Modifier
+                .size(18.dp)
+                .clickable {
+                    val p = "untitled-${untitledN++}"
+                    fileContents[p] = "// new file\n"
+                    openTabs.add(p)
+                    activeTab = p
+                }
+                .padding(4.dp))
+        }
+
+        // ===== Toolbar =====
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF2C2C2C)).padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { openDialog = true }, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.FolderOpen, "Open", tint = Color(0xFFCCCCCC), modifier = Modifier.size(15.dp)) }
+            IconButton(onClick = {
+                activeTab?.let { t ->
+                    if (!t.startsWith("untitled")) {
+                        if (ensureFsEntry(t)) outputLogs.add(0, "💾 saved → $t") else outputLogs.add(0, "⚠ folder $t tidak ditemukan")
+                    } else {
+                        saveAsName = ""; saveAsDialog = true
+                    }
+                }
+            }, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.Save, "Save", tint = Color(0xFFCCCCCC), modifier = Modifier.size(15.dp)) }
+            IconButton(onClick = { saveAsName = ""; saveAsDialog = true }, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.SaveAs, "Save As", tint = Color(0xFFCCCCCC), modifier = Modifier.size(15.dp)) }
+            IconButton(onClick = { findOpen = !findOpen }, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.FindInPage, "Find", tint = if (findOpen) Win11Accent else Color(0xFFCCCCCC), modifier = Modifier.size(15.dp)) }
+            // Run untuk .py
+            IconButton(
+                onClick = {
+                    activeTab?.let { t ->
+                        if (extOf(t) == "py") {
+                            outputLogs.add(0, "▶ Run ${t.substringAfterLast('\\')} …")
+                            val outs = runMiniPython(fileContents[t] ?: "")
+                            if (outs.isEmpty()) outputLogs.add(0, "  (no output)")
+                            outs.asReversed().forEach { outputLogs.add(0, "  $it") }
+                        } else outputLogs.add(0, "▶ Run hanya untuk .py (file ini: ${extOf(t)})")
+                    }
+                },
+                modifier = Modifier.size(26.dp)
+            ) { Icon(Icons.Default.PlayArrow, "Run", tint = Color(0xFF4CAF50), modifier = Modifier.size(15.dp)) }
+            // Compile untuk .mq5 → EA masuk MT5 Navigator
+            IconButton(
+                onClick = {
+                    activeTab?.let { t ->
+                        if (extOf(t) == "mq5" || extOf(t) == "mqh") {
+                            val eaName = t.substringAfterLast('\\').substringBeforeLast('.')
+                            outputLogs.add(0, "⚙ Compiling '${t.substringAfterLast('\\')}'...")
+                            val code = fileContents[t] ?: ""
+                            scope.launch {
+                                delay(700)
+                                val ob = code.count { it == '{' }; val cb = code.count { it == '}' }
+                                if (ob != cb) {
+                                    outputLogs.add(0, "  '{' - unbalanced parentheses (1 error)")
+                                } else {
+                                    if (!expertAdvisors.contains(eaName)) {
+                                        expertAdvisors.add(eaName)
+                                        SimFileAdd(fsOwner = null, simulatedFiles, "C:\\MQL5\\Experts", "$eaName.mq5")
+                                    }
+                                    outputLogs.add(0, "  0 errors, 0 warnings — $eaName.ex5 build OK")
+                                    outputLogs.add(0, "  ✔ terdaftar di MT5 Navigator → Attach untuk auto-trade")
+                                }
+                            }
+                        } else outputLogs.add(0, "⚙ Compile hanya untuk .mq5/.mqh")
+                    }
+                },
+                modifier = Modifier.size(26.dp)
+            ) { Icon(Icons.Default.Build, "Compile", tint = Color(0xFFFFB74D), modifier = Modifier.size(15.dp)) }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(activeTab?.let { langOf(it) } ?: "", color = Color(0xFF999999), fontSize = 9.sp)
+        }
+
+        // ===== Find & Replace bar =====
+        if (findOpen) {
+            Row(
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF252526)).padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BasicTextField(
+                    value = findText, onValueChange = { findText = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                    cursorBrush = SolidColor(Win11Accent),
+                    decorationBox = { inner -> Box(Modifier.background(Color(0xFF333333), RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 4.dp)) { if (findText.isEmpty()) Text("find", color = Color(0xFF777777), fontSize = 11.sp); inner() } },
+                    modifier = Modifier.width(80.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                val matches = activeTab?.let { t -> if (findText.isEmpty()) 0 else (fileContents[t] ?: "").split(findText).size - 1 } ?: 0
+                Text("$matches", color = Color(0xFF9CCC9C), fontSize = 10.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                BasicTextField(
+                    value = replaceText, onValueChange = { replaceText = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                    cursorBrush = SolidColor(Win11Accent),
+                    decorationBox = { inner -> Box(Modifier.background(Color(0xFF333333), RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 4.dp)) { if (replaceText.isEmpty()) Text("replace", color = Color(0xFF777777), fontSize = 11.sp); inner() } },
+                    modifier = Modifier.width(80.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Replace All", color = Win11Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
+                    activeTab?.let { t ->
+                        if (findText.isNotEmpty()) {
+                            val src = fileContents[t] ?: ""
+                            val n = src.split(findText).size - 1
+                            fileContents[t] = src.replace(findText, replaceText)
+                            outputLogs.add(0, "replaced $n occurrence(s) of '$findText'")
+                        }
+                    }
+                })
+            }
+        }
+
+        // ===== Editor (line numbers + autosave ke fileContents) =====
+        val tab = activeTab
+        if (tab == null) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text("Tidak ada file terbuka — Open (📂) atau ＋ New", color = Color(0xFF777777), fontSize = 11.sp)
+            }
+        } else {
+            val text = fileContents[tab] ?: ""
+            val editorScroll = rememberScrollState()
+            Row(modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(editorScroll)) {
+                // Line numbers
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.width(34.dp).background(Color(0xFF252526)).padding(top = 4.dp)
+                ) {
+                    val n = text.lines().size.coerceAtMost(4000)
+                    for (i in 1..n) {
+                        Text("$i", color = Color(0xFF858585), fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth().padding(end = 6.dp))
+                    }
+                }
+                BasicTextField(
+                    value = text,
+                    onValueChange = { fileContents[tab] = it },
+                    textStyle = TextStyle(color = Color(0xFFD4D4D4), fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp),
+                    cursorBrush = SolidColor(Win11Accent),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 4.dp)
+                )
+            }
+        }
+
+        // ===== Output panel =====
+        Column(modifier = Modifier.fillMaxWidth().height(84.dp).background(Color(0xFF252526)).border(1.dp, Color(0xFF333333)).padding(4.dp)) {
+            Text("Output (Run / Compile / Find)", color = Color.Gray, fontSize = 8.sp)
+            LazyColumn {
+                items(outputLogs.take(80)) { line ->
+                    Text(line, color = when {
+                        line.contains("error", ignoreCase = true) && !line.startsWith("  0 errors") -> Color(0xFFEF5350)
+                        line.startsWith("  ✔") || line.startsWith("💾") -> Color(0xFF4CAF50)
+                        else -> Color(0xFFD4D4D4)
+                    }, fontSize = 9.sp, fontFamily = FontFamily.Monospace, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+
+        // ===== Status bar =====
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF007ACC)).padding(horizontal = 6.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            val t = activeTab
+            val content = t?.let { fileContents[it] } ?: ""
+            Text(
+                if (t == null) "Ready" else "Ln ${content.lines().size} · ${content.length} chr · ${langOf(t)}" + if (t.startsWith("untitled")) " · (belum disimpan)" else " · saved↔FS",
+                color = Color.White, fontSize = 9.sp
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text("UTF-8 · Rofwin Code", color = Color.White, fontSize = 9.sp)
+        }
+    }
+
+    // ===== Dialog Open (daftar file kode dari seluruh FS) =====
+    if (openDialog) {
+        AlertDialog(
+            onDismissRequest = { openDialog = false },
+            title = { Text("Open File", fontSize = 14.sp) },
+            text = {
+                val codeExts = setOf("mq5", "mqh", "py", "txt", "md", "ts", "tsx", "json", "sh", "css", "html", "js")
+                val candidates = simulatedFiles.keys.flatMap { k ->
+                    (simulatedFiles[k] ?: emptyList())
+                        .filter { !it.isDirectory && it.name.substringAfterLast('.', "").lowercase() in codeExts }
+                        .map { k.trimEnd('\\') + "\\" + it.name }
+                }.distinct().sorted()
+                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                    items(candidates) { p ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { openPath(p); openDialog = false }.padding(vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Description, null, tint = Win11Accent, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(p, fontSize = 10.sp, color = Color.White, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { openDialog = false }) { Text("Batal") } }
+        )
+    }
+
+    // ===== Dialog Save As =====
+    if (saveAsDialog) {
+        AlertDialog(
+            onDismissRequest = { saveAsDialog = false },
+            title = { Text("Save As", fontSize = 14.sp) },
+            text = {
+                Column {
+                    Text("Tulis nama file (relatif ke D:\\Work) atau path penuh (C:\\...)", fontSize = 10.sp, color = TextSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(value = saveAsName, onValueChange = { saveAsName = it }, singleLine = true, placeholder = { Text("bot_saya.mq5", fontSize = 12.sp) })
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (saveAsName.isNotBlank()) {
+                        val path = if (saveAsName.contains(":")) saveAsName.trim() else "D:\\Work\\" + saveAsName.trim()
+                        fileContents[path] = fileContents[activeTab] ?: "// ${path.substringAfterLast('\\')}\n"
+                        ensureFsEntry(path)
+                        openTabs.add(path)
+                        activeTab = path
+                        outputLogs.add(0, "💾 saved as → $path (tampil di File Explorer)")
+                        saveAsDialog = false
+                    }
+                }) { Text("Simpan") }
+            },
+            dismissButton = { TextButton(onClick = { saveAsDialog = false }) { Text("Batal") } }
+        )
+    }
+}
+
+// Helper kecil: tambahkan SimFile ke folder FS (dipakai Compile EA)
+fun SimFileAdd(fsOwner: Any?, fs: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>, folder: String, name: String) {
+    val list = fs[folder]?.toMutableList() ?: mutableListOf()
+    if (list.none { it.name == name }) list.add(SimFile(name, false, "2 KB"))
+    fs[folder] = list
+}
+
+// Mini interpreter Python (dipakai Python Shell + Rofwin Code ▶ Run)
+fun evalPyPow(e: String): Double? {
+    var expr = e.replace(" ", "")
+    val powIdx = expr.indexOf("**")
+    if (powIdx > 0) {
+        var l = powIdx - 1
+        while (l >= 0 && (expr[l].isDigit() || expr[l] == '.')) l--
+        var r = powIdx + 2
+        while (r < expr.length && (expr[r].isDigit() || expr[r] == '.')) r++
+        val base = expr.substring(l + 1, powIdx).toDoubleOrNull()
+        val ex = expr.substring(powIdx + 2, r).toDoubleOrNull()
+        if (base != null && ex != null) {
+            expr = expr.substring(0, l + 1) + Math.pow(base, ex).toString() + expr.substring(r)
+        }
+    }
+    return evalPy(expr)
+}
+
+fun fmtPyNum(v: Double) = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
+
+fun runMiniPython(code: String): List<String> {
+    val out = mutableListOf<String>()
+    for (rawLine in code.lines()) {
+        val line = rawLine.trim()
+        if (line.isEmpty() || line.startsWith("#") || line.startsWith("import ") || line.startsWith("from ") || line.startsWith("def ") || line.startsWith("class ") || line.endsWith(":")) continue
+        val body = line.trimStart()
+        val pm = Regex("^print\\((.*)\\)$").find(body)
+        when {
+            pm != null -> {
+                val inner = pm.groupValues[1].trim()
+                val q = Regex("^\"(.*)\"$|^'(.*)'$").find(inner)
+                if (q != null) out.add(q.groupValues[1].ifEmpty { q.groupValues[2] })
+                else {
+                    val v = evalPyPow(inner)
+                    out.add(if (v == null) "NameError: cannot evaluate '$inner'" else fmtPyNum(v))
+                }
+            }
+            body.contains('=') && !body.contains("==") -> { /* assignment — skip */ }
+            else -> {
+                val v = evalPyPow(body)
+                if (v != null) out.add(fmtPyNum(v))
+            }
+        }
+    }
+    return out
+}
+
+// =====================================================================
+// Wine Configuration (winecfg) — Applications / Libraries / Drives / Graphics
+// =====================================================================
+@Composable
+fun WineCfgWindow() {
+    var tab by remember { mutableStateOf("Libraries") }
+    val overrides = remember {
+        mutableStateListOf(
+            "d3d11" to "builtin", "dxgi" to "builtin", "d3dcompiler_47" to "native",
+            "winhttp" to "native, builtin", "mscoree" to "disabled"
+        )
+    }
+    var newOverride by remember { mutableStateOf("") }
+    var winVersion by remember { mutableStateOf("Windows 10") }
+    var virtualDesktop by remember { mutableStateOf(true) }
+    var captureMouse by remember { mutableStateOf(true) }
+    var resolution by remember { mutableStateOf("1280x720") }
+    var statusMsg by remember { mutableStateOf("") }
+
+    Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            listOf("Applications", "Libraries", "Drives", "Graphics").forEach { t ->
+                Text(
+                    t,
+                    color = if (t == tab) Win11Accent else Color(0xFFAAAAAA),
+                    fontSize = 11.sp,
+                    fontWeight = if (t == tab) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.clickable { tab = t }.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+        Divider(color = Win11Stroke, modifier = Modifier.padding(vertical = 4.dp))
+        when (tab) {
+            "Applications" -> Column {
+                Text("Windows Version:", color = Color.White, fontSize = 12.sp)
+                listOf("Windows 11", "Windows 10", "Windows 8.1", "Windows 7").forEach { v ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { winVersion = v }.padding(vertical = 3.dp)) {
+                        RadioButton(selected = winVersion == v, onClick = { winVersion = v })
+                        Text(v, color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            }
+            "Libraries" -> Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = newOverride, onValueChange = { newOverride = it }, singleLine = true, placeholder = { Text("new override (mis. quartz)", fontSize = 10.sp) }, modifier = Modifier.weight(1f).height(44.dp), textStyle = TextStyle(fontSize = 11.sp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Button(onClick = {
+                        if (newOverride.isNotBlank() && overrides.none { it.first == newOverride }) {
+                            overrides.add(newOverride to "native, builtin"); newOverride = ""
+                        }
+                    }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Add", fontSize = 10.sp) }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                LazyColumn {
+                    items(overrides) { ov ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                val i = overrides.indexOf(ov)
+                                overrides[i] = ov.first to when (ov.second) {
+                                    "native" -> "builtin"; "builtin" -> "native, builtin"
+                                    "native, builtin" -> "disabled"; else -> "native"
+                                }
+                            }.padding(vertical = 4.dp)
+                        ) {
+                            Text("*${ov.first}", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                            Text(ov.second, color = SecondaryTeal, fontSize = 10.sp)
+                        }
+                    }
+                }
+                Text("(klik untuk putar mode: native/builtin/disabled)", color = TextSecondary, fontSize = 9.sp)
+            }
+            "Drives" -> Column {
+                listOf(
+                    Triple("C:", "..\\..", "Bottle root FS"),
+                    Triple("D:", "OBB space", "Game/app data"),
+                    Triple("E:", "Downloads", "User downloads"),
+                    Triple("Z:", "/", "Android root (hati-hati)")
+                ).forEach { (d, target, desc) ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Storage, null, tint = Win11Accent, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(d, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(30.dp))
+                        Column {
+                            Text(target, color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            Text(desc, color = TextSecondary, fontSize = 9.sp)
+                        }
+                    }
+                }
+            }
+            "Graphics" -> Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = virtualDesktop, onCheckedChange = { virtualDesktop = it })
+                    Text("Emulate a virtual desktop", color = Color.White, fontSize = 12.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Desktop size:", color = Color.White, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedTextField(value = resolution, onValueChange = { resolution = it }, singleLine = true, modifier = Modifier.width(110.dp).height(44.dp), textStyle = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = captureMouse, onCheckedChange = { captureMouse = it })
+                    Text("Automatically capture the mouse", color = Color.White, fontSize = 12.sp)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (statusMsg.isNotEmpty()) Text(statusMsg, color = Color(0xFF4CAF50), fontSize = 10.sp)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { statusMsg = "✔ Settings applied ke container (winetricks & drives sinkron)" }) { Text("Apply") }
+            TextButton(onClick = { statusMsg = "✔ OK — konfigurasi disimpan"; }) { Text("OK") }
+        }
+    }
+}
+
+// =====================================================================
+// Winetricks — installer paket Windows DLL/runtime (progress hidup)
+// =====================================================================
+@Composable
+fun WinetricksWindow() {
+    data class Verb(val name: String, val desc: String)
+    val verbs = listOf(
+        Verb("corefonts", "Arial, Times, Courier (font dasar Windows)"),
+        Verb("d3dx9", "Direct3D 9 runtime penuh"),
+        Verb("d3dcompiler_47", "Shader compiler untuk DX11"),
+        Verb("vcrun2019", "Visual C++ 2015-2022 Redistributable"),
+        Verb("dotnet48", ".NET Framework 4.8 (berat)"),
+        Verb("dxvk", "DirectX→Vulkan (Mali tidak mendukung—sim saja)"),
+        Verb("vb6run", "Visual Basic 6 runtime"),
+        Verb("directplay", "DirectPlay jaringan game lama"),
+        Verb("faudio", "Audio XAudio2 reimplementation"),
+        Verb("allfonts", "Semua font Microsoft")
+    )
+    val installed = remember { mutableStateMapOf<String, Boolean>() }
+    val progress = remember { mutableStateMapOf<String, Float>() }
+    val scope = rememberCoroutineScope()
+
+    Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+        Text("Pilih paket untuk di-install ke container:", color = Color.White, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+        LazyColumn {
+            items(verbs) { v ->
+                val done = installed[v.name] == true
+                val prog = progress[v.name] ?: -1f
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Icon(
+                        if (done) Icons.Default.CheckCircle else Icons.Default.Archive,
+                        contentDescription = null,
+                        tint = if (done) Color(0xFF4CAF50) else Color(0xFF999999),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(v.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text(v.desc, color = TextSecondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (prog >= 0f) {
+                            LinearProgressIndicator(progress = prog, color = Win11Accent, trackColor = Color(0xFF333333), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    if (done) {
+                        Text("installed ✔", color = Color(0xFF4CAF50), fontSize = 9.sp)
+                    } else {
+                        Button(
+                            onClick = {
+                                if (prog < 0f) {
+                                    scope.launch {
+                                        var p = 0f
+                                        progress[v.name] = 0f
+                                        while (p < 1f) { delay(130); p += 0.12f; progress[v.name] = p.coerceAtMost(1f) }
+                                        progress.remove(v.name)
+                                        installed[v.name] = true
+                                    }
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(26.dp)
+                        ) { Text(if (prog >= 0f) "${(prog * 100).toInt()}%" else "Install", fontSize = 9.sp) }
+                    }
+                }
+            }
+        }
+        Text("Paket terinstall menandai container (lihat winecfg).", color = TextSecondary, fontSize = 9.sp)
     }
 }
