@@ -1,4 +1,7 @@
 package com.winlator
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -6,6 +9,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,7 +62,7 @@ import kotlin.math.roundToInt
 
 // Window Type
 enum class DesktopWindow {
-    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER
+    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER, MT5, MQL5_EDITOR
 }
 
 data class SimFile(val name: String, val isDirectory: Boolean = false, val size: String = "1 KB")
@@ -68,6 +74,12 @@ fun WineDesktopSim(
     profile: InputControlsProfile,
     onClose: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("RofwinDrives", android.content.Context.MODE_PRIVATE) }
+    val dDriveEnabled = prefs.getBoolean("drive_d", true)
+    val eDriveEnabled = prefs.getBoolean("drive_e", false)
+    val zDriveEnabled = prefs.getBoolean("drive_z", false)
+
     var isBooting by remember { mutableStateOf(true) }
     var bootProgress by remember { mutableFloatStateOf(0f) }
 
@@ -134,6 +146,16 @@ fun WineDesktopSim(
                         SimFile("python-3.12.exe", false, "25 MB"),
                         SimFile("lasokamodule.exe", false, "1.2 MB"),
                         SimFile("winrar_full.exe", false, "4.5 MB")
+                    ),
+                    "E:\\" to listOf(
+                        SimFile("Media", true),
+                        SimFile("chrome_installer.exe", false, "1.2 MB")
+                    ),
+                    "Z:\\" to listOf(
+                        SimFile("system", true),
+                        SimFile("data", true),
+                        SimFile("vendor", true),
+                        SimFile("build.prop", false, "4 KB")
                     )
                 )
             )
@@ -343,6 +365,8 @@ fun WineDesktopSim(
                         modifier = Modifier.heightIn(max = 200.dp)
                     ) {
                         val quickTools = listOf(
+                            Triple("MT5", Icons.Default.TrendingUp, DesktopWindow.MT5),
+                            Triple("MQL5", Icons.Default.Code, DesktopWindow.MQL5_EDITOR),
                             Triple("PS1", Icons.Default.Terminal, DesktopWindow.COMMAND_PROMPT),
                             Triple("EXE", Icons.Default.PlayCircle, DesktopWindow.COMMAND_PROMPT),
                             Triple("Web", Icons.Default.Language, DesktopWindow.BROWSER),
@@ -454,7 +478,7 @@ fun WineDesktopSim(
                                                     else if (currentPath == "C:\\Program Files" || currentPath == "C:\\users") currentPath = "C:\\"
                                                     else if (currentPath == "C:\\users\\Administrator") currentPath = "C:\\users"
                                                 },
-                                                enabled = currentPath != "C:\\" && currentPath != "D:\\"
+                                                enabled = currentPath != "C:\\" && currentPath != "D:\\" && currentPath != "E:\\" && currentPath != "Z:\\"
                                             ) {
                                                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                                             }
@@ -513,16 +537,17 @@ fun WineDesktopSim(
                                         }
 
                                         // Disk Selection list
-                                        if (currentPath == "C:\\" || currentPath == "D:\\") {
+                                        if (currentPath == "C:\\" || currentPath == "D:\\" || currentPath == "E:\\" || currentPath == "Z:\\") {
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(8.dp),
+                                                    .padding(8.dp)
+                                                    .horizontalScroll(rememberScrollState()),
                                                 horizontalArrangement = Arrangement.spacedBy(16.dp)
                                             ) {
                                                 Card(
                                                     modifier = Modifier
-                                                        .weight(1f)
+                                                        .width(120.dp)
                                                         .clickable { currentPath = "C:\\" },
                                                     colors = CardDefaults.cardColors(containerColor = if (currentPath.startsWith("C:")) PrimarySky.copy(alpha = 0.2f) else DarkSurface)
                                                 ) {
@@ -531,15 +556,43 @@ fun WineDesktopSim(
                                                         Text("Local Disk (C:)", fontSize = 11.sp, color = Color.White)
                                                     }
                                                 }
-                                                Card(
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .clickable { currentPath = "D:\\" },
-                                                    colors = CardDefaults.cardColors(containerColor = if (currentPath.startsWith("D:")) PrimarySky.copy(alpha = 0.2f) else DarkSurface)
-                                                ) {
-                                                    Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                                        Icon(Icons.Default.FolderZip, contentDescription = null, tint = SecondaryTeal, modifier = Modifier.size(32.dp))
-                                                        Text("OBB Space (D:)", fontSize = 11.sp, color = Color.White)
+                                                if (dDriveEnabled) {
+                                                    Card(
+                                                        modifier = Modifier
+                                                            .width(120.dp)
+                                                            .clickable { currentPath = "D:\\" },
+                                                        colors = CardDefaults.cardColors(containerColor = if (currentPath.startsWith("D:")) PrimarySky.copy(alpha = 0.2f) else DarkSurface)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                            Icon(Icons.Default.FolderZip, contentDescription = null, tint = SecondaryTeal, modifier = Modifier.size(32.dp))
+                                                            Text("OBB Space (D:)", fontSize = 11.sp, color = Color.White)
+                                                        }
+                                                    }
+                                                }
+                                                if (eDriveEnabled) {
+                                                    Card(
+                                                        modifier = Modifier
+                                                            .width(120.dp)
+                                                            .clickable { currentPath = "E:\\" },
+                                                        colors = CardDefaults.cardColors(containerColor = if (currentPath.startsWith("E:")) PrimarySky.copy(alpha = 0.2f) else DarkSurface)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.Yellow, modifier = Modifier.size(32.dp))
+                                                            Text("Downloads (E:)", fontSize = 11.sp, color = Color.White)
+                                                        }
+                                                    }
+                                                }
+                                                if (zDriveEnabled) {
+                                                    Card(
+                                                        modifier = Modifier
+                                                            .width(120.dp)
+                                                            .clickable { currentPath = "Z:\\" },
+                                                        colors = CardDefaults.cardColors(containerColor = if (currentPath.startsWith("Z:")) PrimarySky.copy(alpha = 0.2f) else DarkSurface)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                            Icon(Icons.Default.Memory, contentDescription = null, tint = Color.Red, modifier = Modifier.size(32.dp))
+                                                            Text("Root FS (Z:)", fontSize = 11.sp, color = Color.White)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -711,6 +764,12 @@ fun WineDesktopSim(
                                 }
                                 DesktopWindow.SSH_MANAGER -> {
                                     SshManagerWindow()
+                                }
+                                DesktopWindow.MT5 -> {
+                                    Mt5Window()
+                                }
+                                DesktopWindow.MQL5_EDITOR -> {
+                                    Mql5EditorWindow()
                                 }
                                 DesktopWindow.BROWSER -> {
                                     BrowserWindow()
@@ -1020,6 +1079,8 @@ fun getWindowIcon(window: DesktopWindow): ImageVector {
         DesktopWindow.WINRAR -> Icons.Default.FolderZip
         DesktopWindow.PYTHON_SHELL -> Icons.Default.Code
         DesktopWindow.SSH_MANAGER -> Icons.Default.CloudSync
+        DesktopWindow.MT5 -> Icons.Default.TrendingUp
+        DesktopWindow.MQL5_EDITOR -> Icons.Default.Code
         else -> Icons.Default.Laptop
     }
 }
@@ -1037,6 +1098,8 @@ fun getWindowTitle(window: DesktopWindow): String {
         DesktopWindow.WINRAR -> "WinRAR (Unregistered Evaluation Copy)"
         DesktopWindow.PYTHON_SHELL -> "Python 3.12.1 Shell"
         DesktopWindow.SSH_MANAGER -> "SSH Connection Manager"
+        DesktopWindow.MT5 -> "MetaTrader 5"
+        DesktopWindow.MQL5_EDITOR -> "MetaQuotes Language 5 Editor"
         else -> "Wine Window"
     }
 }
@@ -1249,8 +1312,92 @@ fun SshManagerWindow() {
     }
 }
 @Composable
+fun Mt5Window() {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2C))) {
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color.White)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("MetaTrader 5 - Demo Account (Connected)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+        Row(modifier = Modifier.weight(1f)) {
+            // Market Watch
+            Column(modifier = Modifier.width(150.dp).fillMaxHeight().border(1.dp, Color(0xFF333333)).padding(8.dp)) {
+                Text("Market Watch", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("EURUSD   1.0924   1.0925", color = Color.Green, fontSize = 10.sp)
+                Text("GBPUSD   1.2750   1.2752", color = Color.Green, fontSize = 10.sp)
+                Text("USDJPY   145.30   145.31", color = Color.Red, fontSize = 10.sp)
+            }
+            // Chart Area
+            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.Black), contentAlignment = Alignment.Center) {
+                Text("EURUSD, H1", color = Color.DarkGray, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Canvas(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    // Draw a simple mock chart
+                    drawLine(Color.Green, androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width * 0.3f, size.height * 0.4f), strokeWidth = 2f)
+                    drawLine(Color.Red, androidx.compose.ui.geometry.Offset(size.width * 0.3f, size.height * 0.4f), androidx.compose.ui.geometry.Offset(size.width * 0.6f, size.height * 0.7f), strokeWidth = 2f)
+                    drawLine(Color.Green, androidx.compose.ui.geometry.Offset(size.width * 0.6f, size.height * 0.7f), androidx.compose.ui.geometry.Offset(size.width, size.height * 0.2f), strokeWidth = 2f)
+                }
+            }
+        }
+        // Terminal / Toolbox
+        Column(modifier = Modifier.fillMaxWidth().height(100.dp).border(1.dp, Color(0xFF333333)).padding(8.dp)) {
+            Text("Toolbox - Trade | Exposure | History | News", color = Color.LightGray, fontSize = 11.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Balance: 10000.00 USD  Equity: 10050.00 USD  Margin: 50.00", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun Mql5EditorWindow() {
+    var code by remember { mutableStateOf("//+------------------------------------------------------------------+\n//|                                                      Expert.mq5 |\n//|                                      Copyright 2026, MetaQuotes |\n//|                                             https://www.mql5.com |\n//+------------------------------------------------------------------+\n#property copyright \"Copyright 2026\"\n#property link      \"https://www.mql5.com\"\n#property version   \"1.00\"\n\n//+------------------------------------------------------------------+\n//| Expert initialization function                                   |\n//+------------------------------------------------------------------+\nint OnInit()\n  {\n   Print(\"Algo Editor Sync Activated!\");\n   return(INIT_SUCCEEDED);\n  }\n") }
+    var syncStatus by remember { mutableStateOf("Syncing with Algo Cloud...") }
+    LaunchedEffect(Unit) {
+        delay(2000)
+        syncStatus = "Algo Editor MQL5 Sync: Active & Connected"
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) {
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF2C2C2C)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Code, contentDescription = null, tint = Color.LightGray)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("MetaEditor - Expert.mq5", color = Color.White, fontSize = 12.sp)
+            Spacer(modifier = Modifier.weight(1f))
+            Button(onClick = { /* compile mock */ }, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(0.dp)) {
+                Text("Compile", fontSize = 10.sp)
+            }
+        }
+        TextField(
+            value = code,
+            onValueChange = { code = it },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFF1E1E1E),
+                unfocusedContainerColor = Color(0xFF1E1E1E),
+                focusedTextColor = Color(0xFFD4D4D4),
+                unfocusedTextColor = Color(0xFFD4D4D4),
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+        )
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF007ACC)).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.CloudSync, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(syncStatus, color = Color.White, fontSize = 10.sp)
+            Spacer(modifier = Modifier.weight(1f))
+            Text("UTF-8", color = Color.White, fontSize = 10.sp)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("MQL5", color = Color.White, fontSize = 10.sp)
+        }
+    }
+}
+@Composable
 fun BrowserWindow() {
     var url by remember { mutableStateOf("https://www.google.com") }
+    var urlInput by remember { mutableStateOf(url) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().background(DarkSurface).padding(8.dp),
@@ -1259,22 +1406,42 @@ fun BrowserWindow() {
             Icon(Icons.Default.Language, contentDescription = null, tint = Color.White)
             Spacer(modifier = Modifier.width(8.dp))
             TextField(
-                value = url,
-                onValueChange = { url = it },
-                modifier = Modifier.weight(1f).height(40.dp),
-                colors = TextFieldDefaults.colors(focusedContainerColor = DarkSurfaceVariant),
-                textStyle = TextStyle(fontSize = 11.sp, color = Color.White)
+                value = urlInput,
+                onValueChange = { urlInput = it },
+                modifier = Modifier.weight(1f).height(48.dp),
+                colors = TextFieldDefaults.colors(focusedContainerColor = DarkSurfaceVariant, unfocusedContainerColor = DarkSurfaceVariant),
+                textStyle = TextStyle(fontSize = 11.sp, color = Color.White),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = {
+                    var loadUrl = urlInput
+                    if (!loadUrl.startsWith("http://") && !loadUrl.startsWith("https://")) {
+                        loadUrl = "https://$loadUrl"
+                    }
+                    url = loadUrl
+                    webView?.loadUrl(url)
+                }),
+                singleLine = true
             )
-            IconButton(onClick = { /* Refresh sim */ }) {
+            IconButton(onClick = { webView?.reload() }) {
                 Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White)
             }
         }
-        Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.BrowserUpdated, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(64.dp))
-                Text("Simulated Chromium Engine", color = Color.Black, fontWeight = FontWeight.Bold)
-                Text("Viewing $url", color = Color.Gray, fontSize = 11.sp)
-            }
+        Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White)) {
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        webViewClient = WebViewClient()
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.setSupportZoom(true)
+                        loadUrl(url)
+                        webView = this
+                    }
+                },
+                update = {
+                    // Update happens through the go button/keyboard action
+                }
+            )
         }
     }
 }

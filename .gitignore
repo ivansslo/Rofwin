@@ -17,8 +17,8 @@ __pycache__/
 artifacts/
 
 # Runtime payloads fetched during build
-app/src/main/assets/*
-!app/src/main/assets/.gitkeep
+app/app/src/main/assets/*
+!app/app/src/main/assets/.gitkeep
 installable_components/*
 !installable_components/.gitkeep
 wine_addons/*

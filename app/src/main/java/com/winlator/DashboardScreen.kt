@@ -1,4 +1,5 @@
 package com.winlator
+import android.content.Context
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -1378,9 +1379,21 @@ fun QuickAppCard(name: String, icon: ImageVector, badge: String, onClick: () -> 
 
 @Composable
 fun SettingsScreen() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("RofwinDrives", Context.MODE_PRIVATE) }
+    
+    var showDrivesDialog by remember { mutableStateOf(false) }
+    var showAuthSyncDialog by remember { mutableStateOf(false) }
+    var dDriveEnabled by remember { mutableStateOf(prefs.getBoolean("drive_d", true)) }
+    var eDriveEnabled by remember { mutableStateOf(prefs.getBoolean("drive_e", false)) }
+    var zDriveEnabled by remember { mutableStateOf(prefs.getBoolean("drive_z", false)) }
+    var isAuthSynced by remember { mutableStateOf(prefs.getBoolean("auth_synced", false)) }
+
     val settings = remember {
         listOf(
             "General" to Icons.Default.Tune,
+            "Local Drives" to Icons.Default.Storage,
+            "Account Google Auth Sync" to Icons.Default.AccountCircle,
             "Graphics & Rendering" to Icons.Default.DisplaySettings,
             "Audio Engine" to Icons.Default.AudioFile,
             "Network & Proxy" to Icons.Default.Dns,
@@ -1397,7 +1410,13 @@ fun SettingsScreen() {
             items(settings) { (title, icon) ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                    modifier = Modifier.fillMaxWidth().clickable { /* Open sub-settings */ }
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        if (title == "Local Drives") {
+                            showDrivesDialog = true
+                        } else if (title == "Account Google Auth Sync") {
+                            showAuthSyncDialog = true
+                        }
+                    }
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -1414,6 +1433,92 @@ fun SettingsScreen() {
                 }
             }
         }
+    }
+
+    if (showDrivesDialog) {
+        AlertDialog(
+            onDismissRequest = { showDrivesDialog = false },
+            containerColor = DarkSurface,
+            title = { Text("Map Local Drives", color = Color.White) },
+            text = {
+                Column {
+                    Text("Select which local drives to mount in Wine Desktop:", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(bottom = 16.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = true, onCheckedChange = null, enabled = false, colors = CheckboxDefaults.colors(checkedColor = PrimarySky))
+                        Text("Local Disk (C:)", color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = dDriveEnabled,
+                            onCheckedChange = { dDriveEnabled = it },
+                            colors = CheckboxDefaults.colors(checkedColor = PrimarySky)
+                        )
+                        Text("Android OBB/Data (D:)", color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = eDriveEnabled,
+                            onCheckedChange = { eDriveEnabled = it },
+                            colors = CheckboxDefaults.colors(checkedColor = PrimarySky)
+                        )
+                        Text("Downloads (E:)", color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = zDriveEnabled,
+                            onCheckedChange = { zDriveEnabled = it },
+                            colors = CheckboxDefaults.colors(checkedColor = PrimarySky)
+                        )
+                        Text("Root FS (Z:)", color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.edit()
+                        .putBoolean("drive_d", dDriveEnabled)
+                        .putBoolean("drive_e", eDriveEnabled)
+                        .putBoolean("drive_z", zDriveEnabled)
+                        .apply()
+                    showDrivesDialog = false
+                }) {
+                    Text("Save", color = PrimarySky)
+                }
+            }
+        )
+    }
+
+    if (showAuthSyncDialog) {
+        AlertDialog(
+            onDismissRequest = { showAuthSyncDialog = false },
+            containerColor = DarkSurface,
+            title = { Text("Account Google Auth", color = Color.White) },
+            text = {
+                Column {
+                    Text("Synchronize your Google Account for cross-device synchronization.", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(bottom = 16.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = isAuthSynced,
+                            onCheckedChange = { isAuthSynced = it },
+                            colors = CheckboxDefaults.colors(checkedColor = PrimarySky)
+                        )
+                        Text("Enable Google Auth Sync", color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.edit()
+                        .putBoolean("auth_synced", isAuthSynced)
+                        .apply()
+                    showAuthSyncDialog = false
+                }) {
+                    Text("Save", color = PrimarySky)
+                }
+            }
+        )
     }
 }
 
