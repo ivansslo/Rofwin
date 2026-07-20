@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.7.0 — Pro Bridge Edition
+- Landscape NYATA semua device (manifest fullUser + tile Landscape QS + jendela adaptif wideScreen)
+- Taskbar interaktif NYATA: long-press → Buka/Geser◄►/Pin-Unpin/🔒Kunci (tersimpan di sesi)
+- Izin "Tampil di atas aplikasi lain" diminta saat app dibuka (SYSTEM_ALERT_WINDOW)
+- AI Bubble (drag bebas + badge critical) & 4 AI Plugins modular (toggle, tersimpan)
+- Deteksi Critical text: journal MT5, chat AI, log build, output SSH → Notification Center
+- VM Builder: OS image Windows (sim) + Rofwin Auth (integrasi) + **OCI Bridge SSH NYATA (JSch)** — test/perintah/sync sesi → VM Oracle
+- MT5 Setup: download NYATA mt5setup.exe (HTTP + progress) + install ke Program Files (live badge)
+- MT5 Login akun (sim + 🌐 WebTerminal REAL untuk akun live asli); strip "bot BEKERJA" di editor
+- APK Studio: pipeline compile Android APK (sim realistis, error dikenali critical) → build nyata via OCI
+- Ikon desktop bisa scroll; 3 tool baru di desktop/Start/Quick Launch
+- versionCode 170
+
 ## v1.6.0 — AI + Compact + Persistence
 - UI compact untuk CPH1823 (~360dp): jendela 0.96f×0.72f, panel 0.8–0.94f, taskbar tengah horizontalScroll
 - **ROC AI** (jendela baru): assistant trading/coding/compile/EA — online (OpenAI-compatible, key user-side saja) + offline brain + market digest + generator EA ke `D:\Work`

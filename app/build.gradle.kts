@@ -13,8 +13,8 @@ android {
         applicationId = "com.rofwin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 160
-        versionName = "1.6.0"
+        versionCode = 170
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -61,6 +61,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    // v1.7.0: SSH NYATA untuk OCI Bridge (jembatan lokal -> VM Oracle)
+    implementation("com.github.mwiede:jsch:0.2.24")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

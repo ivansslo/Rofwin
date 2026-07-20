@@ -60,6 +60,12 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalConfiguration
 import kotlinx.serialization.json.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -136,7 +142,7 @@ fun evalPy(expr: String): Double? = PyParser(expr).parse()
 
 // Window Type
 enum class DesktopWindow {
-    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER, MT5, MQL5_EDITOR, CODE_EDITOR, WINECFG, WINETRICKS, AI_CHAT
+    NONE, MY_COMPUTER, REGISTRY_EDITOR, TASK_MANAGER, COMMAND_PROMPT, DX_DIAG, BROWSER, GIT_BASH, AI_ROUTE, WINRAR, PYTHON_SHELL, SSH_MANAGER, MT5, MQL5_EDITOR, CODE_EDITOR, WINECFG, WINETRICKS, AI_CHAT, APK_STUDIO, VM_BUILDER, MT5_SETUP
 }
 
 // Posisi trading MT5 (live P/L dihitung dari harga sim; sl/tp opsional)
@@ -239,6 +245,96 @@ fun jsonStr(s: String): String = buildString {
         else -> append(c)
     } }
     append('"')
+}
+
+// ===== v1.7.0 — Deteksi Critical text (journal, AI chat, notif, log build & SSH) =====
+val CRITICAL_PATTERN = Regex(
+    "(critical|fatal|error|exception|margin call|margincall|stopped out|stop out|gagal|disconnect|unauthor|denied|401|403|crash|sl hit|failed)",
+    RegexOption.IGNORE_CASE
+)
+fun detectCritical(text: String): Boolean = CRITICAL_PATTERN.containsMatchIn(text)
+
+// ===== v1.7.0 — Plugin AI yang bisa di-toggle di ROC AI =====
+data class AiPlugin(val id: String, val name: String, val desc: String)
+val AI_PLUGINS = listOf(
+    AiPlugin("eagen", "EA Generator", "AI menulis file .mq5 utuh dari deskripsi"),
+    AiPlugin("rocsync", "ROC Sync", "Tarik struktur terbaru repo ivansslo/rocagents"),
+    AiPlugin("digest", "Market Digest", "Sisipkan konteks pasar live ke jawaban AI"),
+    AiPlugin("critical", "Critical Alert", "Sorot teks kritis (error, margin call, dsb)")
+)
+
+// ===== v1.7.0 — SSH NYATA (JSch) — jembatan lokal -> OCI =====
+fun sshExec(host: String, port: Int, user: String, pass: String, cmd: String, timeoutMs: Int = 9000): Pair<Boolean, String> = try {
+    val jsch = com.jcraft.jsch.JSch()
+    val session = jsch.getSession(user, host, port)
+    session.setPassword(pass)
+    val cfg = java.util.Properties()
+    cfg["StrictHostKeyChecking"] = "no"
+    session.setConfig(cfg)
+    session.connect(timeoutMs)
+    val ch = session.openChannel("exec") as com.jcraft.jsch.ChannelExec
+    ch.setCommand(cmd)
+    ch.connect(timeoutMs)
+    val raw = ch.inputStream.readBytes().toString(Charsets.UTF_8)
+    ch.disconnect()
+    session.disconnect()
+    true to raw.trim().ifBlank { "(tanpa output)" }
+} catch (e: Exception) {
+    false to "ERROR: ${e.message}"
+}
+
+// ===== v1.7.0 — Downloader NYATA (HTTP -> file lokal, dengan progress) =====
+fun downloadToFile(url: String, dest: java.io.File, onProgress: (Long) -> Unit): Pair<Boolean, String> = try {
+    dest.parentFile?.mkdirs()
+    val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+    conn.connectTimeout = 10000
+    conn.readTimeout = 20000
+    conn.instanceFollowRedirects = true
+    conn.setRequestProperty("User-Agent", "Rofwin/1.7")
+    conn.connect()
+    if (conn.responseCode !in 200..299) {
+        false to "HTTP ${conn.responseCode}"
+    } else {
+        var total = 0L
+        conn.inputStream.use { inp ->
+            dest.outputStream().use { out ->
+                val buf = ByteArray(16384)
+                var r: Int
+                while (inp.read(buf).also { r = it } != -1) {
+                    out.write(buf, 0, r)
+                    total += r
+                    onProgress(total)
+                }
+            }
+        }
+        conn.disconnect()
+        true to total.toString()
+    }
+} catch (e: Exception) {
+    false to "ERROR: ${e.message}"
+}
+
+// ===== v1.7.0 — helper FS simulasi (folder rekursif + file dengan ukuran) =====
+fun ensureSimFolder(fs: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>, folder: String) {
+    if (fs.containsKey(folder)) return
+    val parent = folder.substringBeforeLast('\\', "")
+    val name = folder.substringAfterLast('\\')
+    if (parent.isNotEmpty()) ensureSimFolder(fs, parent)
+    fs[folder] = fs[folder] ?: emptyList()
+    if (parent.isNotEmpty()) {
+        val pl = (fs[parent] ?: emptyList()).toMutableList()
+        if (pl.none { it.name == name }) pl.add(SimFile(name, true, "Folder"))
+        fs[parent] = pl
+    }
+}
+
+fun putSimFile(fs: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>, folder: String, name: String, size: String) {
+    ensureSimFolder(fs, folder)
+    val l = (fs[folder] ?: emptyList()).toMutableList()
+    val i = l.indexOfFirst { it.name == name }
+    val f = SimFile(name, false, size)
+    if (i >= 0) l[i] = f else l.add(f)
+    fs[folder] = l
 }
 
 // Template EA lokal (dipakai AI saat offline — tanpa API key)
@@ -369,7 +465,7 @@ void OnTick()
 
 data class SimFile(val name: String, val isDirectory: Boolean = false, val size: String = "1 KB")
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WineDesktopSim(
     container: WineContainer,
@@ -537,6 +633,21 @@ fun WineDesktopSim(
     val mt5ActiveEAs = remember { mutableStateMapOf<String, String>() }
     var mt5Balance by remember { mutableFloatStateOf(10000f) }
     var mt5Ticket by remember { mutableLongStateOf(53000100L) }
+
+    // ===== v1.7.0 — Taskbar pinned interaktif (move/unpin) + lock, tersimpan di sesi =====
+    val taskbarPinned = remember { mutableStateListOf(DesktopWindow.MY_COMPUTER, DesktopWindow.BROWSER, DesktopWindow.CODE_EDITOR, DesktopWindow.AI_CHAT, DesktopWindow.COMMAND_PROMPT, DesktopWindow.MT5, DesktopWindow.TASK_MANAGER) }
+    var taskbarLocked by remember { mutableStateOf(false) }
+    var pinnedMenuFor by remember { mutableStateOf<DesktopWindow?>(null) }
+    // ===== v1.7.0 — AI bubble mengambang + plugins + critical alerts =====
+    var aiBubbleOn by remember { mutableStateOf(true) }
+    var bubbleOffset by remember { mutableStateOf(Offset(36f, 980f)) }
+    val aiPluginsOn = remember { mutableStateMapOf<String, Boolean>().apply { AI_PLUGINS.forEach { put(it.id, true) } } }
+    val criticalAlerts = remember { mutableStateListOf<String>() }
+    // ===== v1.7.0 — akun MT5 (login sim + WebTerminal nyata) & status install =====
+    var mt5Account by remember { mutableStateOf("") }
+    var mt5Installed by remember { mutableStateOf(false) }
+    // ===== v1.7.0 — orientasi (tile Landscape di Quick Settings) =====
+    var landscapeLocked by remember { mutableStateOf(false) }
     val mt5Rnd = remember { java.util.Random() }
 
     // ===== Live tick engine GLOBAL (harga + candle + EA auto-trade, 24/7 di desktop) =====
@@ -640,6 +751,16 @@ fun WineDesktopSim(
                 root["history"]?.jsonArray?.forEach { mt5History.add(it.jsonPrimitive.content) }
                 root["journal"]?.jsonArray?.forEach { mt5Journal.add(it.jsonPrimitive.content) }
                 root["activeEAs"]?.jsonObject?.forEach { (ea, sym) -> mt5ActiveEAs[ea] = sym.jsonPrimitive.content }
+                root["pinned"]?.jsonArray?.let { arr ->
+                    taskbarPinned.clear()
+                    arr.forEach { el -> try { taskbarPinned.add(DesktopWindow.valueOf(el.jsonPrimitive.content)) } catch (_: Exception) {} }
+                    if (taskbarPinned.isEmpty()) taskbarPinned.add(DesktopWindow.MY_COMPUTER)
+                }
+                root["tblock"]?.jsonPrimitive?.content?.let { taskbarLocked = it == "1" }
+                root["plugins"]?.jsonObject?.forEach { (k, v) -> aiPluginsOn[k] = v.jsonPrimitive.content == "1" }
+                root["bubble"]?.jsonPrimitive?.content?.let { aiBubbleOn = it == "1" }
+                root["mt5account"]?.jsonPrimitive?.content?.let { mt5Account = it }
+                root["mt5installed"]?.jsonPrimitive?.content?.let { mt5Installed = it == "1" }
                 mt5Journal.add(0, "✔ sesi dipulihkan dari storage (file, FS, positions, EA)")
             } catch (_: Exception) {}
         }
@@ -685,7 +806,20 @@ fun WineDesktopSim(
                     first = false
                     sb.append(jsonStr(ea)).append(":").append(jsonStr(sym))
                 }
-                sb.append("}}")
+                sb.append("}")
+                sb.append(",\"pinned\":[")
+                taskbarPinned.forEachIndexed { i, w -> if (i > 0) sb.append(","); sb.append(jsonStr(w.name)) }
+                sb.append("],\"tblock\":\"").append(if (taskbarLocked) "1" else "0").append("\",\"plugins\":{")
+                var fpnd = true
+                aiPluginsOn.forEach { (k, v) ->
+                    if (!fpnd) sb.append(",")
+                    fpnd = false
+                    sb.append(jsonStr(k)).append(":\"").append(if (v) "1" else "0").append("\"")
+                }
+                sb.append("},\"bubble\":\"").append(if (aiBubbleOn) "1" else "0")
+                sb.append("\",\"mt5account\":").append(jsonStr(mt5Account))
+                sb.append(",\"mt5installed\":\"").append(if (mt5Installed) "1" else "0").append("\"")
+                sb.append("}")
                 prefs.edit().putString("rofwin_session_v2", sb.toString()).apply()
             } catch (_: Exception) {}
         }
@@ -747,6 +881,15 @@ fun WineDesktopSim(
         // Stats logic removed (games only)
     }
 
+    // ===== v1.7.0 — Deteksi Critical: journal MT5 -> Notification Center + badge bubble =====
+    LaunchedEffect(mt5Journal.size) {
+        val head = mt5Journal.firstOrNull() ?: return@LaunchedEffect
+        if (detectCritical(head) && aiPluginsOn["critical"] != false && (criticalAlerts.isEmpty() || criticalAlerts.first() != head)) {
+            criticalAlerts.add(0, head)
+            if (criticalAlerts.size > 15) criticalAlerts.removeLast()
+        }
+    }
+
     if (isBooting) {
         // Immersive Booting Screen
         Box(
@@ -771,7 +914,7 @@ fun WineDesktopSim(
                     )
                 )
                 Text(
-                    text = "Windows 11 Edition — Build 26200.rofwin",
+                    text = "Pro Bridge Edition 1.7 — Build 26200.rofwin.pro",
                     style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
@@ -791,6 +934,30 @@ fun WineDesktopSim(
             }
         }
     } else {
+        // ===== v1.7.0 — adaptasi layar apa pun: sinkronisasi device phone/tablet, portrait/landscape =====
+        val cfg = LocalConfiguration.current
+        val wideScreen = cfg.screenWidthDp >= 600
+        // ===== v1.7.0 — Izin NYATA "Tampil di atas aplikasi lain" (diminta sekali saat app dibuka) =====
+        var overlayPrompt by remember { mutableStateOf(!prefs.getBoolean("overlay_asked", false)) }
+        if (overlayPrompt && !Settings.canDrawOverlays(context)) {
+            AlertDialog(
+                onDismissRequest = { overlayPrompt = false; prefs.edit().putBoolean("overlay_asked", true).apply() },
+                title = { Text("Aktifkan Izin Overlay", fontSize = 14.sp) },
+                text = { Text("Izinkan Rofwin tampil di atas aplikasi lain agar SEMUA ikon responsif terhadap sentuhan di mode apa pun (desktop penuh, landscape, multi-window). Ditanya sekali — bisa dilewati (Nanti).", fontSize = 11.sp) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        prefs.edit().putBoolean("overlay_asked", true).apply()
+                        overlayPrompt = false
+                        try {
+                            context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        } catch (_: Exception) {}
+                    }) { Text("AKTIFKAN") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { overlayPrompt = false; prefs.edit().putBoolean("overlay_asked", true).apply() }) { Text("Nanti") }
+                }
+            )
+        }
         // Desktop Screen
         Box(
             modifier = Modifier
@@ -847,6 +1014,7 @@ fun WineDesktopSim(
                     .fillMaxHeight()
                     .width(100.dp)
                     .verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState())
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -900,6 +1068,51 @@ fun WineDesktopSim(
                     icon = Icons.Default.AlignVerticalBottom,
                     onClick = { openWin(DesktopWindow.TASK_MANAGER) }
                 )
+                DesktopIconButton(
+                    name = "MT5 Setup",
+                    icon = Icons.Default.Download,
+                    onClick = { openWin(DesktopWindow.MT5_SETUP) }
+                )
+                DesktopIconButton(
+                    name = "APK Studio",
+                    icon = Icons.Default.Android,
+                    onClick = { openWin(DesktopWindow.APK_STUDIO) }
+                )
+                DesktopIconButton(
+                    name = "VM Builder",
+                    icon = Icons.Default.Dns,
+                    onClick = { openWin(DesktopWindow.VM_BUILDER) }
+                )
+            }
+
+            // ===== v1.7.0 — AI Bubble NYATA: drag bebas ke mana pun, tap buka ROC AI, badge critical =====
+            if (aiBubbleOn) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(bubbleOffset.x.roundToInt(), bubbleOffset.y.roundToInt()) }
+                        .zIndex(5f)
+                        .size(46.dp)
+                        .shadow(8.dp, CircleShape)
+                        .background(Brush.linearGradient(listOf(Win11AccentSolid, Color(0xFF7B1FA2))), CircleShape)
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                bubbleOffset += dragAmount
+                            }
+                        }
+                        .clickable { openWin(DesktopWindow.AI_CHAT) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.SmartToy, "ROC AI Bubble", tint = Color.White, modifier = Modifier.size(22.dp))
+                    if (criticalAlerts.isNotEmpty() && aiPluginsOn["critical"] != false) {
+                        Box(
+                            modifier = Modifier.align(Alignment.TopEnd).size(15.dp).background(Color(0xFFFF1744), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(criticalAlerts.size.coerceAtMost(9).toString(), color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             // Quick Launcher Grid for Professional Tools (Optimized for Mali-G72)
@@ -938,7 +1151,10 @@ fun WineDesktopSim(
                             Triple("WSL", Icons.Default.Terminal, DesktopWindow.GIT_BASH),
                             Triple("Web", Icons.Default.Language, DesktopWindow.BROWSER),
                             Triple("Python", Icons.Default.PlayCircle, DesktopWindow.PYTHON_SHELL),
-                            Triple("Folder", Icons.Default.Folder, DesktopWindow.MY_COMPUTER)
+                            Triple("Folder", Icons.Default.Folder, DesktopWindow.MY_COMPUTER),
+                            Triple("Setup", Icons.Default.Download, DesktopWindow.MT5_SETUP),
+                            Triple("APK", Icons.Default.Android, DesktopWindow.APK_STUDIO),
+                            Triple("VM", Icons.Default.Dns, DesktopWindow.VM_BUILDER)
                         )
                         items(quickTools) { (name, icon, win) ->
                             Column(
@@ -973,8 +1189,8 @@ fun WineDesktopSim(
                         .background(Color(0xFF202020))
                     else -> Modifier
                         .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
-                        .fillMaxWidth(0.96f)
-                        .fillMaxHeight(0.72f)
+                        .fillMaxWidth(if (wideScreen) 0.72f else 0.96f)
+                        .fillMaxHeight(if (wideScreen) 0.86f else 0.72f)
                         .shadow(24.dp, winShape, ambientColor = Color.Black, spotColor = Color.Black)
                         .clip(winShape)
                         .background(Color(0xFF202020))
@@ -1490,7 +1706,9 @@ fun WineDesktopSim(
                                         onBalance = { mt5Balance = it },
                                         ticket = mt5Ticket,
                                         onTicket = { mt5Ticket = it },
-                                        expertAdvisors = expertAdvisors
+                                        expertAdvisors = expertAdvisors,
+                                        account = mt5Account,
+                                        onAccount = { mt5Account = it }
                                     )
                                 }
                                 DesktopWindow.AI_CHAT -> {
@@ -1501,6 +1719,9 @@ fun WineDesktopSim(
                                         mids = mt5Mids,
                                         positions = mt5Positions,
                                         balance = mt5Balance,
+                                        pluginsOn = aiPluginsOn,
+                                        bubbleOn = aiBubbleOn,
+                                        onBubbleChange = { aiBubbleOn = it },
                                         onLaunch = { w -> openWin(w) }
                                     )
                                 }
@@ -1510,6 +1731,7 @@ fun WineDesktopSim(
                                         fileContents = fileContents,
                                         simulatedFiles = simulatedFiles,
                                         expertAdvisors = expertAdvisors,
+                                        eaActive = mt5ActiveEAs.size,
                                         initialPath = "C:\\MQL5\\Experts\\Expert.mq5"
                                     )
                                 }
@@ -1518,6 +1740,7 @@ fun WineDesktopSim(
                                         fileContents = fileContents,
                                         simulatedFiles = simulatedFiles,
                                         expertAdvisors = expertAdvisors,
+                                        eaActive = mt5ActiveEAs.size,
                                         initialPath = null
                                     )
                                 }
@@ -1535,6 +1758,26 @@ fun WineDesktopSim(
                                 }
                                 DesktopWindow.AI_ROUTE -> {
                                     AiRouteWindow()
+                                }
+                                DesktopWindow.MT5_SETUP -> {
+                                    Mt5SetupWindow(
+                                        simulatedFiles = simulatedFiles,
+                                        journalLogs = mt5Journal,
+                                        installed = mt5Installed,
+                                        onInstalled = { mt5Installed = it }
+                                    )
+                                }
+                                DesktopWindow.APK_STUDIO -> {
+                                    ApkStudioWindow(
+                                        simulatedFiles = simulatedFiles,
+                                        journalLogs = mt5Journal
+                                    )
+                                }
+                                DesktopWindow.VM_BUILDER -> {
+                                    VmBuilderWindow(
+                                        simulatedFiles = simulatedFiles,
+                                        journalLogs = mt5Journal
+                                    )
                                 }
                                 DesktopWindow.DX_DIAG -> {
                                     // dxdiag details
@@ -1607,56 +1850,93 @@ fun WineDesktopSim(
                         Win11Logo(Modifier.size(20.dp))
                     }
                     Spacer(modifier = Modifier.width(2.dp))
-                    val pinned = listOf(
-                        DesktopWindow.MY_COMPUTER,
-                        DesktopWindow.BROWSER,
-                        DesktopWindow.CODE_EDITOR,
-                        DesktopWindow.AI_CHAT,
-                        DesktopWindow.COMMAND_PROMPT,
-                        DesktopWindow.MT5,
-                        DesktopWindow.TASK_MANAGER
-                    )
+                    // ===== v1.7.0 — pinned taskbar NYATA: long-press = menu (Buka/Geser/Pin/Kunci) =====
                     val running = listOfNotNull(openWindow.takeIf { it != DesktopWindow.NONE }) + minimizedWindows
-                    val taskItems = (pinned + running).distinct()
+                    val taskItems = (taskbarPinned + running).distinct()
                     taskItems.forEach { win ->
                         val isOpen = win == openWindow
                         val isRunning = running.contains(win)
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .width(37.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable {
-                                    if (isOpen) {
-                                        minimizedWindows.add(win)
-                                        openWindow = DesktopWindow.NONE
-                                        isMaximized = false
-                                        isFullscreen = false
-                                    } else {
-                                        minimizedWindows.remove(win)
-                                        openWin(win)
-                                    }
-                                }
-                        ) {
-                            Icon(
-                                getWindowIcon(win),
-                                contentDescription = getWindowTitle(win),
-                                tint = if (isOpen) Win11Accent else Color(0xFFE8E8E8),
-                                modifier = Modifier.size(19.dp)
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            Box(
+                        val isPinned = taskbarPinned.contains(win)
+                        Box {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
                                 modifier = Modifier
-                                    .padding(bottom = 3.dp)
-                                    .width(if (isOpen) 14.dp else if (isRunning) 6.dp else 0.dp)
-                                    .height(3.dp)
-                                    .background(
-                                        if (isOpen || isRunning) Win11Accent else Color.Transparent,
-                                        RoundedCornerShape(2.dp)
+                                    .width(37.dp)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .combinedClickable(
+                                        onClick = {
+                                            if (isOpen) {
+                                                minimizedWindows.add(win)
+                                                openWindow = DesktopWindow.NONE
+                                                isMaximized = false
+                                                isFullscreen = false
+                                            } else {
+                                                minimizedWindows.remove(win)
+                                                openWin(win)
+                                            }
+                                        },
+                                        onLongClick = { pinnedMenuFor = win }
                                     )
-                            )
+                            ) {
+                                Icon(
+                                    getWindowIcon(win),
+                                    contentDescription = getWindowTitle(win),
+                                    tint = if (isOpen) Win11Accent else Color(0xFFE8E8E8),
+                                    modifier = Modifier.size(19.dp)
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Box(
+                                    modifier = Modifier
+                                        .padding(bottom = 3.dp)
+                                        .width(if (isOpen) 14.dp else if (isRunning) 6.dp else 0.dp)
+                                        .height(3.dp)
+                                        .background(
+                                            if (isOpen || isRunning) Win11Accent else Color.Transparent,
+                                            RoundedCornerShape(2.dp)
+                                        )
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = pinnedMenuFor == win,
+                                onDismissRequest = { pinnedMenuFor = null },
+                                modifier = Modifier.background(Win11Card)
+                            ) {
+                                if (taskbarLocked) {
+                                    DropdownMenuItem(text = { Text("🔒 Taskbar terkunci — buka kunci dulu", fontSize = 9.sp, color = Color(0xFF808080)) }, enabled = false, onClick = {})
+                                }
+                                DropdownMenuItem(text = { Text("Buka", fontSize = 11.sp, color = Color.White) }, onClick = { pinnedMenuFor = null; minimizedWindows.remove(win); openWin(win) })
+                                val idx = taskbarPinned.indexOf(win)
+                                DropdownMenuItem(
+                                    text = { Text("◄ Geser kiri", fontSize = 11.sp, color = if (!taskbarLocked && isPinned && idx > 0) Color.White else Color.Gray) },
+                                    enabled = !taskbarLocked && isPinned && idx > 0,
+                                    onClick = { taskbarPinned.add(idx - 1, taskbarPinned.removeAt(idx)); pinnedMenuFor = null }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Geser kanan ►", fontSize = 11.sp, color = if (!taskbarLocked && isPinned && idx in 0 until taskbarPinned.size - 1) Color.White else Color.Gray) },
+                                    enabled = !taskbarLocked && isPinned && idx in 0 until taskbarPinned.size - 1,
+                                    onClick = { taskbarPinned.add(idx + 1, taskbarPinned.removeAt(idx)); pinnedMenuFor = null }
+                                )
+                                if (isPinned) {
+                                    DropdownMenuItem(
+                                        text = { Text("Lepas sematan", fontSize = 11.sp, color = if (taskbarLocked) Color.Gray else Color.White) },
+                                        enabled = !taskbarLocked,
+                                        onClick = { taskbarPinned.remove(win); pinnedMenuFor = null }
+                                    )
+                                } else {
+                                    DropdownMenuItem(
+                                        text = { Text("Sematkan ke taskbar", fontSize = 11.sp, color = Color.White) },
+                                        enabled = !taskbarLocked,
+                                        onClick = { taskbarPinned.add(win); pinnedMenuFor = null }
+                                    )
+                                }
+                                Divider(color = Color(0xFF3A3A3A))
+                                DropdownMenuItem(
+                                    text = { Text(if (taskbarLocked) "🔓 Buka kunci taskbar" else "🔒 Kunci taskbar", fontSize = 11.sp, color = Color(0xFFFFC107)) },
+                                    onClick = { taskbarLocked = !taskbarLocked; pinnedMenuFor = null }
+                                )
+                            }
                         }
                     }
                 }
@@ -1786,6 +2066,15 @@ fun WineDesktopSim(
                             prefs.edit().putBoolean("low_ram", lowRamMode).apply()
                         }
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        QsTile(icon = Icons.Default.SmartToy, label = "AI Bubble", on = aiBubbleOn, modifier = Modifier.weight(1f)) { aiBubbleOn = !aiBubbleOn }
+                        QsTile(icon = Icons.Default.ScreenRotation, label = "Landscape", on = landscapeLocked, modifier = Modifier.weight(1f)) {
+                            landscapeLocked = !landscapeLocked
+                            (context as? android.app.Activity)?.requestedOrientation = if (landscapeLocked) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                        }
+                        QsTile(icon = Icons.Default.Lock, label = "Kunci Bar", on = taskbarLocked, modifier = Modifier.weight(1f)) { taskbarLocked = !taskbarLocked }
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
                     // Volume NYATA — mengubah volume media Android
                     val audioManager = remember { context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
@@ -1838,6 +2127,19 @@ fun WineDesktopSim(
                 ) {
                     Text("Notifications", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(8.dp))
+                    if (criticalAlerts.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, null, tint = Color(0xFFFF5252), modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text("Critical terdeteksi (${criticalAlerts.size})", color = Color(0xFFFF5252), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Text("Clear", color = Color(0xFFFF8A80), fontSize = 9.sp, modifier = Modifier.clickable { criticalAlerts.clear() }.padding(4.dp))
+                        }
+                        criticalAlerts.take(3).forEach { c ->
+                            Text("• " + c.take(90), color = Color(0xFFFF8A80), fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
                     listOf(
                         Triple("Rofwin", "Windows 11 UI aktif di container ini", "baru saja"),
                         Triple("MetaTrader 5 (sim)", "Feed lokal 7 pair berjalan", "1 menit"),
@@ -1881,6 +2183,9 @@ fun WineDesktopSim(
                     StartApp("Task Manager", Icons.Default.AlignVerticalBottom, DesktopWindow.TASK_MANAGER),
                     StartApp("Registry Editor", Icons.Default.Settings, DesktopWindow.REGISTRY_EDITOR),
                     StartApp("AI ROC Route", Icons.Default.Route, DesktopWindow.AI_ROUTE),
+                    StartApp("MT5 Setup", Icons.Default.Download, DesktopWindow.MT5_SETUP),
+                    StartApp("APK Studio", Icons.Default.Android, DesktopWindow.APK_STUDIO),
+                    StartApp("VM Builder", Icons.Default.Dns, DesktopWindow.VM_BUILDER),
                     StartApp("DirectX Diag", Icons.Default.Info, DesktopWindow.DX_DIAG)
                 )
                 var startQuery by remember { mutableStateOf("") }
@@ -2146,6 +2451,9 @@ fun getWindowIcon(window: DesktopWindow): ImageVector {
         DesktopWindow.WINECFG -> Icons.Default.Settings
         DesktopWindow.WINETRICKS -> Icons.Default.Handyman
         DesktopWindow.AI_CHAT -> Icons.Default.SmartToy
+        DesktopWindow.APK_STUDIO -> Icons.Default.Android
+        DesktopWindow.VM_BUILDER -> Icons.Default.Dns
+        DesktopWindow.MT5_SETUP -> Icons.Default.Download
         else -> Icons.Default.Laptop
     }
 }
@@ -2169,6 +2477,9 @@ fun getWindowTitle(window: DesktopWindow): String {
         DesktopWindow.WINECFG -> "Wine Configuration (winecfg)"
         DesktopWindow.WINETRICKS -> "Winetricks — Windows DLLs & Runtimes"
         DesktopWindow.AI_CHAT -> "ROC AI — Trading & Code Assistant"
+        DesktopWindow.APK_STUDIO -> "APK Studio — Android Build (Windows Compile)"
+        DesktopWindow.VM_BUILDER -> "VM Builder — Windows OS Image + OCI Bridge"
+        DesktopWindow.MT5_SETUP -> "MT5 Setup — Download & Install"
         else -> "Wine Window"
     }
 }
@@ -2748,7 +3059,9 @@ fun Mt5Window(
     onBalance: (Float) -> Unit,
     ticket: Long,
     onTicket: (Long) -> Unit,
-    expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>
+    expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    account: String,
+    onAccount: (String) -> Unit
 ) {
     val rnd = remember { java.util.Random() }
     var chartSymbol by remember { mutableStateOf("EURUSD") }
@@ -2794,6 +3107,13 @@ fun Mt5Window(
         onTicket(ticket + 1)
     }
 
+    // ===== v1.7.0 — Login akun MT5/MQL5 (sim lokal + WebTerminal RESMI nyata via browser) =====
+    val context = LocalContext.current
+    var loginOpen by remember { mutableStateOf(false) }
+    var loginId by remember { mutableStateOf("") }
+    var loginPass by remember { mutableStateOf("") }
+    var loginServer by remember { mutableStateOf("Rofwin-Demo") }
+
     val floating: Float = positions.sumOf { pnlOf(it) }.toFloat()
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2C))) {
@@ -2836,7 +3156,18 @@ fun Mt5Window(
                 modifier = Modifier.clickable { maOn = !maOn }.padding(horizontal = 4.dp, vertical = 3.dp)
             )
             Spacer(modifier = Modifier.weight(1f))
-            Text("Demo 12345678", color = Color(0xFF88CC88), fontSize = 9.sp)
+            Text(
+                "Login",
+                color = Color.White,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(Color(0xFF2E7D32), RoundedCornerShape(3.dp))
+                    .clickable { loginOpen = true }
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(if (account.isBlank()) "Demo 12345678" else account, color = Color(0xFF88CC88), fontSize = 9.sp)
         }
 
         Row(modifier = Modifier.weight(1f)) {
@@ -3023,7 +3354,9 @@ fun Mt5Window(
                             "23:05  JPY  BoJ: kebijakan tetap longgar"
                         )) { n -> Text(n, color = Color(0xFFB0B0B0), fontSize = 8.sp) }
                     }
-                    else -> items(journalLogs) { j -> Text(j, color = Color(0xFF9CCC9C), fontSize = 8.sp, fontFamily = FontFamily.Monospace) }
+                    else -> items(journalLogs) { j ->
+                        Text(j, color = if (detectCritical(j)) Color(0xFFFF5252) else Color(0xFF9CCC9C), fontSize = 8.sp, fontFamily = FontFamily.Monospace, fontWeight = if (detectCritical(j)) FontWeight.Bold else FontWeight.Normal)
+                    }
                 }
             }
             val marginUsed = positions.sumOf { it.lots * 130 }.toFloat()
@@ -3040,6 +3373,40 @@ fun Mt5Window(
             Spacer(modifier = Modifier.width(4.dp))
             Text("Connected | $pingMs ms | ${activeEAs.size} EA aktif | bot jalan walau jendela ditutup", color = Color(0xFF999999), fontSize = 8.sp)
         }
+    }
+
+    // ===== v1.7.0 — Dialog Login akun MT5/MQL5 =====
+    if (loginOpen) {
+        AlertDialog(
+            onDismissRequest = { loginOpen = false },
+            title = { Text("Login — MetaTrader 5", fontSize = 14.sp) },
+            text = {
+                Column {
+                    OutlinedTextField(value = loginId, onValueChange = { loginId = it }, label = { Text("Login (no. akun)", fontSize = 10.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(value = loginPass, onValueChange = { loginPass = it }, label = { Text("Password", fontSize = 10.sp) }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(value = loginServer, onValueChange = { loginServer = it }, label = { Text("Server broker", fontSize = 10.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Akun asli (uang nyata / live trading) hanya bisa via WebTerminal resmi broker — tombol hijau membuka browser.", color = Color(0xFFFFB74D), fontSize = 8.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = loginId.trim().ifBlank { "12345678" }
+                    onAccount("$id@$loginServer")
+                    journalLogs.add(0, "login $id $loginServer — sesi akun aktif (sim)")
+                    loginPass = ""
+                    loginOpen = false
+                }) { Text("Hubungkan (Sim)", fontSize = 11.sp) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    loginOpen = false
+                    try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.metatrader.app")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                }) { Text("🌐 WebTerminal REAL", fontSize = 11.sp, color = Color(0xFF4CAF50)) }
+            }
+        )
     }
 
     // ===== Dialog New Order (F9) — symbol, lot, SL/TP dalam pip =====
@@ -3375,6 +3742,7 @@ fun CodeEditorWindow(
     fileContents: androidx.compose.runtime.snapshots.SnapshotStateMap<String, String>,
     simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
     expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    eaActive: Int = 0,
     initialPath: String?
 ) {
     val openTabs = remember { mutableStateListOf<String>() }
@@ -3437,6 +3805,19 @@ fun CodeEditorWindow(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) {
+        // ===== v1.7.0 — status bot: EA tetap BEKERJA saat editor MQL5 dipakai (tick engine global) =====
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF14261A)).padding(horizontal = 8.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.SmartToy, null, tint = if (eaActive > 0) Color(0xFF4CAF50) else Color(0xFF777777), modifier = Modifier.size(11.dp))
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                if (eaActive > 0) "$eaActive EA/bot sedang BEKERJA — tick engine global jalan walau editor ini sedang dipakai" else "tidak ada EA aktif — compile ⚙ lalu Attach di MT5 Navigator; bot bisa bekerja sambil Anda mengedit",
+                color = if (eaActive > 0) Color(0xFF81C784) else Color(0xFF999999),
+                fontSize = 8.sp
+            )
+        }
         // ===== Tab bar =====
         Row(
             modifier = Modifier.fillMaxWidth().background(Color(0xFF252526)).horizontalScroll(rememberScrollState()),
@@ -3944,6 +4325,9 @@ fun RocAiWindow(
     mids: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Double>,
     positions: androidx.compose.runtime.snapshots.SnapshotStateList<Mt5Pos>,
     balance: Float,
+    pluginsOn: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
+    bubbleOn: Boolean,
+    onBubbleChange: (Boolean) -> Unit,
     onLaunch: (DesktopWindow) -> Unit
 ) {
     val context = LocalContext.current
@@ -4023,7 +4407,7 @@ fun RocAiWindow(
         busy = true
         val systemPrompt = if (isEaGen)
             "Anda generator kode MQL5. Balas HANYA kode .mq5 valid (OnInit/OnTick), tanpa penjelasan, tanpa markdown fence. Strategi: $userText"
-        else "Kamu ROC-AI, asisten aplikasi Rofwin (Android Windows 11 sim). Jawab ringkas & teknis dalam Bahasa Indonesia. Konteks live: ${marketDigest()}"
+        else "Kamu ROC-AI, asisten aplikasi Rofwin (Android Windows 11 sim). Jawab ringkas & teknis dalam Bahasa Indonesia." + (if (pluginsOn["digest"] != false) " Konteks live: ${marketDigest()}" else "")
         val body = "{\"model\":${jsonStr(model)},\"temperature\":0.3,\"max_tokens\":${if (isEaGen) "900" else "500"},\"messages\":[" +
                 "{\"role\":\"system\",\"content\":${jsonStr(systemPrompt)}}," +
                 "{\"role\":\"user\",\"content\":${jsonStr(userText)}}]}"
@@ -4059,6 +4443,7 @@ fun RocAiWindow(
         input = ""
         val lower = t.lowercase()
         when {
+            lower.startsWith("buat ea ") && pluginsOn["eagen"] == false -> pushBot("🔌 Plugin 'EA Generator' sedang NONAKTIF — aktifkan di ⚙ Settings → Plugins.")
             lower.startsWith("buat ea ") -> {
                 val rest = t.substring(8).trim()
                 val parts = rest.split(" ", limit = 2)
@@ -4176,18 +4561,44 @@ fun RocAiWindow(
                     )
                 }
                 Text("Key tersimpan hanya di HP Anda (SharedPreferences). Untuk Groq gratis: console.groq.com → API Keys.", color = TextSecondary, fontSize = 8.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("AI Bubble mengambang", color = Color.White, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = bubbleOn, onCheckedChange = onBubbleChange, modifier = Modifier.height(28.dp))
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Plugins (AI new era — modular)", color = Win11Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                AI_PLUGINS.forEach { p ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { pluginsOn[p.id] = pluginsOn[p.id] == false }.padding(vertical = 2.dp)
+                    ) {
+                        Icon(
+                            if (pluginsOn[p.id] != false) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                            null,
+                            tint = if (pluginsOn[p.id] != false) Win11Accent else Color.Gray,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Text(p.name, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(p.desc, color = TextSecondary, fontSize = 8.sp)
+                        }
+                    }
+                }
             }
         }
 
         // Quick actions
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(4.dp)) {
-            listOf(
-                "📊 Analisis market" to { send("analisis market") },
-                "🤖 Buat EA…" to { send("buat ea EA_AI scalp MA7-21") },
-                "🔄 Sync rocagents" to { syncRocAgents() },
-                "📈 Status posisi" to { pushBot("📈 " + marketDigest()) },
-                "🧪 Cek compile" to { pushBot(offlineBrain("compile")) }
-            ).forEach { (label, act) ->
+            val quickChips = buildList<Pair<String, () -> Unit>> {
+                add("📊 Analisis market" to { send("analisis market") })
+                if (pluginsOn["eagen"] != false) add("🤖 Buat EA…" to { send("buat ea EA_AI scalp MA7-21") })
+                if (pluginsOn["rocsync"] != false) add("🔄 Sync rocagents" to { syncRocAgents() })
+                add("📈 Status posisi" to { pushBot("📈 " + marketDigest()) })
+                add("🧪 Cek compile" to { pushBot(offlineBrain("compile")) })
+            }
+            quickChips.forEach { (label, act) ->
                 Text(
                     label,
                     color = Color.White,
@@ -4210,16 +4621,19 @@ fun RocAiWindow(
                         .padding(vertical = 3.dp),
                     horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
                 ) {
+                    val isCrit = !isUser && detectCritical(text) && pluginsOn["critical"] != false
                     Column(
                         modifier = Modifier
                             .fillMaxWidth(0.92f)
                             .background(
-                                if (isUser) Color(0xFF274B73) else Color(0xFF1F2937),
+                                if (isUser) Color(0xFF274B73) else if (isCrit) Color(0xFF3A1616) else Color(0xFF1F2937),
                                 RoundedCornerShape(8.dp)
                             )
+                            .border(if (isCrit) 1.dp else 0.dp, if (isCrit) Color(0xFFFF5252) else Color.Transparent, RoundedCornerShape(8.dp))
                             .padding(8.dp)
                     ) {
-                        Text(text, color = Color(0xFFE8E8E8), fontSize = 11.sp, lineHeight = 15.sp)
+                        if (isCrit) Text("⚠ CRITICAL TEXT terdeteksi", color = Color(0xFFFF5252), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        Text(text, color = if (isCrit) Color(0xFFFFCFCF) else Color(0xFFE8E8E8), fontSize = 11.sp, lineHeight = 15.sp)
                     }
                 }
             }
@@ -4397,6 +4811,428 @@ fun GitBashWindow(simulatedFiles: androidx.compose.runtime.snapshots.SnapshotSta
                     input = ""
                 })
             )
+        }
+    }
+}
+
+// =====================================================================
+// v1.7.0 — MT5/MQL5 Setup: DOWNLOAD NYATA installer desktop (HTTP) +
+// install ke FS Windows di dalam APK jenius (live ticks/order/EA global).
+// =====================================================================
+@Composable
+fun Mt5SetupWindow(
+    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
+    journalLogs: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    installed: Boolean,
+    onInstalled: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf("https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe") }
+    var busy by remember { mutableStateOf(false) }
+    var dlBytes by remember { mutableLongStateOf(0L) }
+    var status by remember { mutableStateOf("Siap. URL default = installer resmi MetaQuotes (file desktop ASLI).") }
+    var downloaded by remember { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF141B22)).padding(10.dp).verticalScroll(rememberScrollState())) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Download, null, tint = Win11Accent, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Column {
+                Text("MT5 / MQL5 Setup", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (installed) "✔ Terinstal di C:\\Program Files\\MetaTrader 5 — LIVE" else "download nyata → install di dalam APK jenius",
+                    color = if (installed) Color(0xFF4CAF50) else Color(0xFF9FB2CC), fontSize = 9.sp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("URL installer (.exe)", fontSize = 10.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(6.dp))
+        Button(enabled = !busy, onClick = {
+            busy = true
+            dlBytes = 0
+            status = "Mengunduh (NYATA via HTTP)…"
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val dest = java.io.File(context.filesDir, "downloads/mt5setup.exe")
+                val (ok, res) = downloadToFile(url.trim(), dest) { b -> dlBytes = b }
+                if (ok) {
+                    val totalB = res.toLongOrNull() ?: 0L
+                    val mbText = "%.2f MB".format(totalB / 1048576f)
+                    putSimFile(simulatedFiles, "C:\\Downloads", "mt5setup.exe", mbText)
+                    status = "✔ Download NYATA selesai → C:\\Downloads\\mt5setup.exe ($mbText)"
+                    downloaded = true
+                    journalLogs.add(0, "downloaded mt5setup.exe ($totalB bytes, real http)")
+                } else {
+                    status = "🔴 Download gagal: $res — cek internet/URL. (Install simulasi tetap bisa.)"
+                }
+                busy = false
+            }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (busy) "Mengunduh… ${"%.1f".format(dlBytes / 1048576f)} MB" else "⬇ Download Installer (NYATA)", fontSize = 11.sp)
+        }
+        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        LazyColumn(modifier = Modifier.heightIn(max = 110.dp)) {
+            items(status.split("\n")) { s ->
+                Text(s, color = if (detectCritical(s) || s.startsWith("🔴")) Color(0xFFFF8A80) else if (s.startsWith("✔")) Color(0xFF81C784) else Color(0xFF9FB2CC), fontSize = 10.sp, modifier = Modifier.padding(vertical = 1.dp))
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            enabled = !busy && !installing && !installed,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+            onClick = {
+                installing = true
+                scope.launch {
+                    status = status + "\n▸ mengekstrak terminal64.exe, metaeditor64.exe, MQL5\\…"
+                    delay(800)
+                    putSimFile(simulatedFiles, "C:\\Program Files\\MetaTrader 5", "terminal64.exe", "48,1 MB")
+                    putSimFile(simulatedFiles, "C:\\Program Files\\MetaTrader 5", "metaeditor64.exe", "21,7 MB")
+                    putSimFile(simulatedFiles, "C:\\Program Files\\MetaTrader 5\\MQL5\\Experts", "README.txt", "1 KB")
+                    putSimFile(simulatedFiles, "C:\\Program Files\\MetaTrader 5\\MQL5\\Include", "Trade.mqh", "212 KB")
+                    delay(600)
+                    onInstalled(true)
+                    installing = false
+                    status = status + "\n✔ Instalasi selesai — MetaTrader 5 LIVE: feed 24 simbol, order, EA auto-trade jalan global."
+                    journalLogs.add(0, "MT5 installed to Program Files (sim) — live mode ON")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (installed) "✔ Sudah Terinstal" else if (installing) "Menginstal…" else "⚙ Install ke C:\\Program Files\\MetaTrader 5", fontSize = 11.sp) }
+        if (!downloaded && !installed) {
+            Text("Install bisa tanpa download (mode simulasi penuh). Download memberi file .exe ASLI di storage APK.", color = Color(0xFF9FB2CC), fontSize = 8.sp, modifier = Modifier.padding(top = 6.dp))
+        }
+        if (installed) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF14261A))) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text("LIVE aktif — segala hal jalan:", color = Color(0xFF81C784), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("• ticks 24 simbol & EA auto-trade jalan walau jendela ditutup\n• SL/TP auto-close per tick\n• MQL5 ↔ MT5 sinkron via sesi tersimpan\n• Login akun: MT5 → tombol Login (WebTerminal REAL untuk akun asli)", color = Color(0xFF9FB2CC), fontSize = 9.sp)
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
+// v1.7.0 — APK Studio: "compile" Android APK dari desktop Windows.
+// Pipeline realistis + catatan jujur: build NYATA bisa via VM Builder →
+// OCI Bridge (SSH JSch nyata menjalankan gradle assembleRelease).
+// =====================================================================
+@Composable
+fun ApkStudioWindow(
+    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
+    journalLogs: androidx.compose.runtime.snapshots.SnapshotStateList<String>
+) {
+    val scope = rememberCoroutineScope()
+    var projName by remember { mutableStateOf("MyTraderApp") }
+    var template by remember { mutableStateOf("Trading Bot") }
+    var building by remember { mutableStateOf(false) }
+    var progress by remember { mutableFloatStateOf(0f) }
+    val logs = remember { mutableStateListOf("APK Studio siap — pilih template lalu ▶ Build Release") }
+    val rnd = remember { java.util.Random() }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF181C14)).padding(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Android, null, tint = Color(0xFF3DDC84), modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Column {
+                Text("APK Studio", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("Windows → Android compile · AGP 9.1 · Kotlin 2.1 · targetSdk 35", color = Color(0xFF9AA86F), fontSize = 9.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = projName,
+            onValueChange = { projName = it.filter { c -> c.isLetterOrDigit() }.take(24) },
+            label = { Text("Nama project", fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row {
+            listOf("Trading Bot", "WebView App", "Empty").forEach { t ->
+                Text(
+                    t,
+                    color = if (template == t) Color.White else Color(0xFF9AA86F), fontSize = 10.sp,
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .background(if (template == t) Color(0xFF2E7D32) else Color(0xFF262D1E), RoundedCornerShape(6.dp))
+                        .clickable { template = t }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(enabled = !building && projName.isNotBlank(), onClick = {
+            building = true
+            progress = 0f
+            logs.clear()
+            val proj = projName.trim()
+            scope.launch {
+                val failAt = if (rnd.nextInt(100) < 10) 5 + rnd.nextInt(5) else -1
+                val stages = listOf(
+                    "> Configure project :app",
+                    "> Task :app:preBuild UP-TO-DATE",
+                    "> Task :app:mergeReleaseResources",
+                    "> Task :app:compileReleaseKotlin",
+                    "> Task :app:compileReleaseJavaWithJavac",
+                    "> Task :app:mergeDexRelease",
+                    "> Task :app:lintVitalAnalyzeRelease",
+                    "> Task :app:packageRelease",
+                    "> Task :app:assembleRelease",
+                    "zipalign -f -p 4 app-release.apk",
+                    "apksigner sign --ks rofwin-local.keystore",
+                    "apksigner verify --verbose ✔ 1 signer"
+                )
+                var ok = true
+                run {
+                    var i = 0
+                    while (i < stages.size) {
+                        if (i == failAt) {
+                            logs.add("e: ${stages[i]} — ERROR: unresolved reference 'BuildConfig' (gagal simulasi)")
+                            logs.add("FAILURE: Build failed with an exception. Transient — Coba Build lagi.")
+                            journalLogs.add(0, "apk build FAILED: $proj (sim) — ERROR compile")
+                            progress = 1f
+                            ok = false
+                            break
+                        }
+                        logs.add(stages[i])
+                        i++
+                        progress = i / stages.size.toFloat()
+                        delay(340)
+                    }
+                }
+                if (ok) {
+                    progress = 1f
+                    logs.add("BUILD SUCCESSFUL in ${18 + rnd.nextInt(40)}s")
+                    val mb = "%.1f MB".format(5.5f + rnd.nextFloat() * 8f)
+                    putSimFile(simulatedFiles, "D:\\Projects\\$proj", "app-release.apk", mb)
+                    logs.add("output → D:\\Projects\\$proj\\app-release.apk ($mb)")
+                    journalLogs.add(0, "apk built: D:\\Projects\\$proj\\app-release.apk ($mb) [sim]")
+                }
+                building = false
+            }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (building) "Building… ${(progress * 100).toInt()}%" else "▶ Build Release APK", fontSize = 11.sp)
+        }
+        if (building) LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        Text("Jujur: pipeline di atas simulasi realistis. Build APK NYATA dari source tersedia — jalankan 'gradle assembleRelease' di repo Anda lewat VM Builder → OCI Bridge (SSH nyata).", color = Color(0xFF9AA86F), fontSize = 8.sp)
+        Spacer(modifier = Modifier.height(4.dp))
+        LazyColumn(modifier = Modifier.weight(1f).background(Color(0xFF101308), RoundedCornerShape(6.dp)).padding(6.dp)) {
+            items(logs) { l ->
+                Text(l, color = if (detectCritical(l)) Color(0xFFFF8A80) else if (l.contains("SUCCESSFUL") || l.contains("✔")) Color(0xFF8BC34A) else Color(0xFFB9C99B), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            }
+        }
+    }
+}
+
+// =====================================================================
+// v1.7.0 — VM Builder: rakit OS image Windows (sim, hasil FS + journal)
+// + Rofwin Auth (integrasi: mengunci Start VM & OCI Bridge)
+// + OCI Bridge: SSH NYATA (JSch) — skenario peningkatan lokal → OCI.
+// =====================================================================
+@Composable
+fun VmBuilderWindow(
+    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
+    journalLogs: androidx.compose.runtime.snapshots.SnapshotStateList<String>
+) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("RofwinDrives", android.content.Context.MODE_PRIVATE) }
+    val scope = rememberCoroutineScope()
+    var tab by remember { mutableStateOf("Image") }
+
+    // --- Auth (integrasi auth — gate Start VM & OCI Bridge) ---
+    var authUser by remember { mutableStateOf(prefs.getString("vm_auth_user", "") ?: "") }
+    var authInput by remember { mutableStateOf("") }
+    var authPass by remember { mutableStateOf("") }
+    val authed = authUser.isNotBlank()
+
+    // --- Image builder ---
+    val images = listOf("Windows 11 23H2 Pro", "Windows 10 22H2 Pro", "Windows Server 2022")
+    var imgIdx by remember { mutableStateOf(0) }
+    var ramGb by remember { mutableFloatStateOf(4f) }
+    var building by remember { mutableStateOf(false) }
+    var buildLog by remember { mutableStateOf("") }
+    var vmRunning by remember { mutableStateOf(false) }
+    var imageReady by remember { mutableStateOf(false) }
+
+    // --- OCI bridge (SSH NYATA) ---
+    var ociHost by remember { mutableStateOf(prefs.getString("oci_host", "161.118.253.28") ?: "161.118.253.28") }
+    var ociUser by remember { mutableStateOf(prefs.getString("oci_user", "ubuntu") ?: "ubuntu") }
+    var ociPass by remember { mutableStateOf("") }
+    var ociPort by remember { mutableStateOf("22") }
+    var ociBusy by remember { mutableStateOf(false) }
+    var ociCmd by remember { mutableStateOf("uname -a") }
+    val ociLogs = remember { mutableStateListOf<String>() }
+
+    fun ociRun(cmd: String, tag: String) {
+        if (ociBusy) return
+        ociBusy = true
+        ociLogs.add(0, "→ [$tag] $cmd")
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val (ok, out) = sshExec(ociHost.trim(), ociPort.toIntOrNull() ?: 22, ociUser.trim(), ociPass, cmd)
+            ociLogs.add(0, (if (ok) "✔ " else "🔴 ") + out.take(700))
+            ociBusy = false
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF171B24)).padding(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Dns, null, tint = Win11Accent, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("VM Builder Pro", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (authed) "auth: $authUser ✔ · jembatan lokal→OCI siap" else "belum login — Auth mengunci Start VM & OCI Bridge",
+                    color = if (authed) Color(0xFF4CAF50) else Color(0xFFFFB74D), fontSize = 9.sp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Row {
+            listOf("Image", "Auth", "OCI Bridge").forEach { t ->
+                Text(
+                    t,
+                    color = if (tab == t) Color.White else Color(0xFF8FA3BF),
+                    fontSize = 11.sp,
+                    fontWeight = if (tab == t) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .background(if (tab == t) Win11AccentSolid else Color(0xFF232B3B), RoundedCornerShape(6.dp))
+                        .clickable { tab = t }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        when (tab) {
+            "Image" -> Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text("Rakit OS image Windows — hasil terdaftar di FS (D:\\VM) & journal.", color = Color(0xFF9FB2CC), fontSize = 10.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Image:", color = Color.White, fontSize = 11.sp, modifier = Modifier.width(46.dp))
+                    Text("‹", color = Win11Accent, fontSize = 18.sp, modifier = Modifier.clickable { imgIdx = (imgIdx - 1 + images.size) % images.size }.padding(6.dp))
+                    Text(images[imgIdx], color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("›", color = Win11Accent, fontSize = 18.sp, modifier = Modifier.clickable { imgIdx = (imgIdx + 1) % images.size }.padding(6.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("RAM ${ramGb.toInt()} GB", color = Color.White, fontSize = 10.sp, modifier = Modifier.width(74.dp))
+                    Slider(value = ramGb, onValueChange = { ramGb = it }, valueRange = 2f..16f, modifier = Modifier.weight(1f))
+                }
+                Button(enabled = !building, onClick = {
+                    building = true
+                    buildLog = ""
+                    val img = images[imgIdx]
+                    scope.launch {
+                        val stages = listOf(
+                            "dism /apply-image /imagefile:${img.replace(" ", "_")}.wim /index:1",
+                            "menanam driver virtio + qemu-guest-agent…",
+                            "unattend.xml → autologon RofwinAuth, timezone Asia/Jakarta",
+                            "sysprep /generalize /oobe /shutdown",
+                            "konversi → qcow2 (profil RAM ${ramGb.toInt()} GB)",
+                        )
+                        stages.forEach { s -> buildLog += "▸ $s\n"; delay(520) }
+                        val name = img.replace(" ", "_") + ".qcow2"
+                        putSimFile(simulatedFiles, "D:\\VM", name, "6,2 GB")
+                        imageReady = true
+                        building = false
+                        buildLog += "✔ OS image siap: D:\\VM\\$name\n"
+                        journalLogs.add(0, "vm image built: $name (sim)")
+                    }
+                }, modifier = Modifier.fillMaxWidth()) { Text(if (building) "Membangun…" else "⚒ Build OS Image", fontSize = 11.sp) }
+                if (buildLog.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(buildLog, color = if (buildLog.contains("✔")) Color(0xFF81C784) else Color(0xFF9FB2CC), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Button(
+                    enabled = imageReady && !building,
+                    colors = ButtonDefaults.buttonColors(containerColor = if (authed) Color(0xFF2E7D32) else Color(0xFF555555)),
+                    onClick = {
+                        if (authed) {
+                            vmRunning = !vmRunning
+                            journalLogs.add(0, if (vmRunning) "VM started (sim) — auth OK via $authUser" else "VM stopped (sim)")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (!authed) "🔒 Start VM (butuh Auth dulu)" else if (vmRunning) "■ Stop VM (running)" else "▶ Start VM — integrasi auth ✔", fontSize = 11.sp) }
+                if (vmRunning) Text("Console (sim): Windows login → RofwinAuth auto · RDP 127.0.0.1:3390", color = Color(0xFF81C784), fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+            "Auth" -> Column {
+                if (authed) {
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF14261A))) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("✔ Terautentikasi sebagai $authUser", color = Color(0xFF81C784), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Integrasi auth aktif untuk: Start VM, OCI Bridge, Sync sesi → OCI.", color = Color(0xFF9FB2CC), fontSize = 9.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = {
+                        authUser = ""
+                        prefs.edit().remove("vm_auth_user").apply()
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E2424)), modifier = Modifier.fillMaxWidth()) { Text("Logout") }
+                } else {
+                    Text("Rofwin Auth — mengunci VM Builder & OCI Bridge (kredensial disimpan lokal di HP, tidak pernah dicetak).", color = Color(0xFF9FB2CC), fontSize = 10.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(value = authInput, onValueChange = { authInput = it }, label = { Text("Username", fontSize = 10.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(value = authPass, onValueChange = { authPass = it }, label = { Text("Password", fontSize = 10.sp) }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(enabled = authInput.isNotBlank() && authPass.isNotBlank(), onClick = {
+                        authUser = authInput.trim()
+                        prefs.edit().putString("vm_auth_user", authUser).apply()
+                        authPass = ""
+                        journalLogs.add(0, "auth login: $authUser (Rofwin Auth lokal)")
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Login / Daftar") }
+                }
+            }
+            else -> Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text("OCI Bridge — SSH NYATA (JSch) ke VM Oracle. Nomor langkah mengikuti skenario peningkatan: ① test ② perintah ③ sync sesi.", color = Color(0xFF9FB2CC), fontSize = 10.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                if (!authed) {
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3A2A14))) {
+                        Text("🔒 Terkunci — login dulu di tab Auth (integrasi auth).", color = Color(0xFFFFB74D), fontSize = 11.sp, modifier = Modifier.padding(10.dp))
+                    }
+                } else {
+                    Row {
+                        OutlinedTextField(value = ociHost, onValueChange = { ociHost = it; prefs.edit().putString("oci_host", it).apply() }, label = { Text("Host", fontSize = 9.sp) }, singleLine = true, modifier = Modifier.weight(1.6f))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        OutlinedTextField(value = ociPort, onValueChange = { ociPort = it }, label = { Text("Port", fontSize = 9.sp) }, singleLine = true, modifier = Modifier.weight(0.8f))
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row {
+                        OutlinedTextField(value = ociUser, onValueChange = { ociUser = it; prefs.edit().putString("oci_user", it).apply() }, label = { Text("User", fontSize = 9.sp) }, singleLine = true, modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        OutlinedTextField(value = ociPass, onValueChange = { ociPass = it }, label = { Text("Password (tidak disimpan)", fontSize = 9.sp) }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.weight(1.2f))
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row {
+                        Button(enabled = !ociBusy && ociPass.isNotBlank(), onClick = { ociRun("echo LOGIN-SUKSES && hostname && uptime", "test") }, modifier = Modifier.weight(1f)) { Text("① Test Koneksi", fontSize = 10.sp) }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Button(enabled = !ociBusy && ociPass.isNotBlank(), onClick = {
+                            val blob = prefs.getString("rofwin_session_v2", "") ?: ""
+                            val b64 = java.util.Base64.getEncoder().encodeToString(blob.toByteArray(Charsets.UTF_8))
+                            ociRun("echo $b64 | base64 -d > ~/rofwin_session.json && echo SYNC-OK", "sync sesi")
+                        }, modifier = Modifier.weight(1f)) { Text("③ Sync Sesi → OCI", fontSize = 10.sp) }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(value = ociCmd, onValueChange = { ociCmd = it }, label = { Text("② Perintah remote", fontSize = 9.sp) }, singleLine = true, modifier = Modifier.weight(1f))
+                        IconButton(enabled = !ociBusy && ociPass.isNotBlank(), onClick = { ociRun(ociCmd, "cmd") }) { Icon(Icons.Default.Send, "Run", tint = Win11Accent) }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (ociBusy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+                        items(ociLogs) { l ->
+                            Text(l, color = if (detectCritical(l) || l.startsWith("🔴")) Color(0xFFFF8A80) else if (l.startsWith("✔")) Color(0xFF81C784) else Color(0xFF9FB2CC), fontFamily = FontFamily.Monospace, fontSize = 9.sp, modifier = Modifier.padding(vertical = 2.dp))
+                        }
+                    }
+                }
+            }
         }
     }
 }
