@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -466,6 +467,7 @@ void OnTick()
 data class SimFile(val name: String, val isDirectory: Boolean = false, val size: String = "1 KB")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+// ===== v1.8.1 — breadcrumb masuk desktop (exception ditangkap Crash Shield JVM -> Panel Crash Dashboard) =====
 @Composable
 fun WineDesktopSim(
     container: WineContainer,
@@ -473,7 +475,21 @@ fun WineDesktopSim(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
+    LaunchedEffect(Unit) { crumb(context, "D1:composed") }
+    WineDesktopSimInner(container, profile, onClose)
+}
+
+@Composable
+private fun WineDesktopSimInner(
+    container: WineContainer,
+    profile: InputControlsProfile,
+    onClose: () -> Unit
+) {
+    val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("RofwinDrives", android.content.Context.MODE_PRIVATE) }
+    // ===== v1.8.1 — Safe Mode state =====
+    val crashPrefs = remember { context.getSharedPreferences("RofwinCrash", android.content.Context.MODE_PRIVATE) }
+    val safeMode = remember { crashPrefs.getBoolean("safe_next_mode", false) }
     val dDriveEnabled = prefs.getBoolean("drive_d", true)
     val eDriveEnabled = prefs.getBoolean("drive_e", false)
     val zDriveEnabled = prefs.getBoolean("drive_z", false)
@@ -639,7 +655,7 @@ fun WineDesktopSim(
     var taskbarLocked by remember { mutableStateOf(false) }
     var pinnedMenuFor by remember { mutableStateOf<DesktopWindow?>(null) }
     // ===== v1.7.0 — AI bubble mengambang + plugins + critical alerts =====
-    var aiBubbleOn by remember { mutableStateOf(true) }
+    var aiBubbleOn by remember { mutableStateOf(!safeMode) }
     var bubbleOffset by remember { mutableStateOf(Offset(36f, 980f)) }
     val aiPluginsOn = remember { mutableStateMapOf<String, Boolean>().apply { AI_PLUGINS.forEach { put(it.id, true) } } }
     val criticalAlerts = remember { mutableStateListOf<String>() }
@@ -727,8 +743,9 @@ fun WineDesktopSim(
 
     // ===== Sesi tersave di storage (autosave tiap 5 dtk — unlimited, tahan tutup app) =====
     LaunchedEffect(Unit) {
+        crumb(context, "R:start")
         // ---- restore ----
-        prefs.getString("rofwin_session_v2", null)?.let { blob ->
+        if (!safeMode) prefs.getString("rofwin_session_v2", null)?.let { blob ->
             try {
                 val root = kotlinx.serialization.json.Json.parseToJsonElement(blob).jsonObject
                 root["fs"]?.jsonObject?.forEach { (path, arr) ->
@@ -764,6 +781,7 @@ fun WineDesktopSim(
                 mt5Journal.add(0, "✔ sesi dipulihkan dari storage (file, FS, positions, EA)")
             } catch (_: Exception) {}
         }
+        crumb(context, "R:ok")
         // ---- autosave loop ----
         while (true) {
             delay(5000)
@@ -824,6 +842,8 @@ fun WineDesktopSim(
             } catch (_: Exception) {}
         }
     }
+
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); crumb(context, "D2:live") }
 
     var newFileName by remember { mutableStateOf("") }
     var fileTypeFolder by remember { mutableStateOf(false) }
@@ -937,27 +957,7 @@ fun WineDesktopSim(
         // ===== v1.7.0 — adaptasi layar apa pun: sinkronisasi device phone/tablet, portrait/landscape =====
         val cfg = LocalConfiguration.current
         val wideScreen = cfg.screenWidthDp >= 600
-        // ===== v1.7.0 — Izin NYATA "Tampil di atas aplikasi lain" (diminta sekali saat app dibuka) =====
-        var overlayPrompt by remember { mutableStateOf(!prefs.getBoolean("overlay_asked", false)) }
-        if (overlayPrompt && !Settings.canDrawOverlays(context)) {
-            AlertDialog(
-                onDismissRequest = { overlayPrompt = false; prefs.edit().putBoolean("overlay_asked", true).apply() },
-                title = { Text("Aktifkan Izin Overlay", fontSize = 14.sp) },
-                text = { Text("Izinkan Rofwin tampil di atas aplikasi lain agar SEMUA ikon responsif terhadap sentuhan di mode apa pun (desktop penuh, landscape, multi-window). Ditanya sekali — bisa dilewati (Nanti).", fontSize = 11.sp) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        prefs.edit().putBoolean("overlay_asked", true).apply()
-                        overlayPrompt = false
-                        try {
-                            context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        } catch (_: Exception) {}
-                    }) { Text("AKTIFKAN") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { overlayPrompt = false; prefs.edit().putBoolean("overlay_asked", true).apply() }) { Text("Nanti") }
-                }
-            )
-        }
+        // ===== v1.8.1 — dialog overlay auto DIHAPUS (anti-FC); diganti tile Overlay manual di Quick Settings =====
         // Desktop Screen
         Box(
             modifier = Modifier
@@ -1085,14 +1085,42 @@ fun WineDesktopSim(
                 )
             }
 
+            // ===== v1.8.1 — Safe Mode banner =====
+            if (safeMode) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .zIndex(40f)
+                        .padding(top = 44.dp, start = 16.dp, end = 16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFB26A00))
+                        .padding(10.dp)
+                ) {
+                    Text("SAFE MODE AKTIF — sesi tidak dipulihkan, bubble & panel pinned dibatasi.", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("jejak: " + (crashPrefs.getString("crumbs", "") ?: "-"), color = Color(0xFFFFECB3), fontSize = 9.sp)
+                    Text(
+                        "PULIHKAN NORMAL & MULAI ULANG",
+                        color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFFFCC80))
+                            .clickable {
+                                crashPrefs.edit().putBoolean("safe_next_mode", false).remove("crumbs").remove("last_crash").apply()
+                                (context as? android.app.Activity)?.recreate()
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+
             // ===== v1.7.0 — AI Bubble NYATA: drag bebas ke mana pun, tap buka ROC AI, badge critical =====
-            if (aiBubbleOn) {
+            if (aiBubbleOn && !safeMode) {
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(bubbleOffset.x.roundToInt(), bubbleOffset.y.roundToInt()) }
                         .zIndex(5f)
                         .size(46.dp)
-                        .shadow(8.dp, CircleShape)
                         .background(Brush.linearGradient(listOf(Win11AccentSolid, Color(0xFF7B1FA2))), CircleShape)
                         .pointerInput(Unit) {
                             detectDragGestures { change, dragAmount ->
@@ -1850,23 +1878,22 @@ fun WineDesktopSim(
                         Win11Logo(Modifier.size(20.dp))
                     }
                     Spacer(modifier = Modifier.width(2.dp))
-                    // ===== v1.7.0 — pinned taskbar NYATA: long-press = menu (Buka/Geser/Pin/Kunci) =====
+                    // ===== v1.8.1 — pinned taskbar anti-FC: detectTapGestures (tanpa Popup/DropdownMenu di frame-1) =====
                     val running = listOfNotNull(openWindow.takeIf { it != DesktopWindow.NONE }) + minimizedWindows
-                    val taskItems = (taskbarPinned + running).distinct()
+                    val taskItems = if (safeMode) running.distinct() else (taskbarPinned + running).distinct()
                     taskItems.forEach { win ->
                         val isOpen = win == openWindow
                         val isRunning = running.contains(win)
-                        val isPinned = taskbarPinned.contains(win)
-                        Box {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .width(37.dp)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .combinedClickable(
-                                        onClick = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .width(37.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(4.dp))
+                                .pointerInput(win, taskbarLocked) {
+                                    detectTapGestures(
+                                        onTap = {
                                             if (isOpen) {
                                                 minimizedWindows.add(win)
                                                 openWindow = DesktopWindow.NONE
@@ -1877,69 +1904,62 @@ fun WineDesktopSim(
                                                 openWin(win)
                                             }
                                         },
-                                        onLongClick = { pinnedMenuFor = win }
-                                    )
-                            ) {
-                                Icon(
-                                    getWindowIcon(win),
-                                    contentDescription = getWindowTitle(win),
-                                    tint = if (isOpen) Win11Accent else Color(0xFFE8E8E8),
-                                    modifier = Modifier.size(19.dp)
-                                )
-                                Spacer(modifier = Modifier.weight(1f))
-                                Box(
-                                    modifier = Modifier
-                                        .padding(bottom = 3.dp)
-                                        .width(if (isOpen) 14.dp else if (isRunning) 6.dp else 0.dp)
-                                        .height(3.dp)
-                                        .background(
-                                            if (isOpen || isRunning) Win11Accent else Color.Transparent,
-                                            RoundedCornerShape(2.dp)
-                                        )
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = pinnedMenuFor == win,
-                                onDismissRequest = { pinnedMenuFor = null },
-                                modifier = Modifier.background(Win11Card)
-                            ) {
-                                if (taskbarLocked) {
-                                    DropdownMenuItem(text = { Text("🔒 Taskbar terkunci — buka kunci dulu", fontSize = 9.sp, color = Color(0xFF808080)) }, enabled = false, onClick = {})
-                                }
-                                DropdownMenuItem(text = { Text("Buka", fontSize = 11.sp, color = Color.White) }, onClick = { pinnedMenuFor = null; minimizedWindows.remove(win); openWin(win) })
-                                val idx = taskbarPinned.indexOf(win)
-                                DropdownMenuItem(
-                                    text = { Text("◄ Geser kiri", fontSize = 11.sp, color = if (!taskbarLocked && isPinned && idx > 0) Color.White else Color.Gray) },
-                                    enabled = !taskbarLocked && isPinned && idx > 0,
-                                    onClick = { taskbarPinned.add(idx - 1, taskbarPinned.removeAt(idx)); pinnedMenuFor = null }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Geser kanan ►", fontSize = 11.sp, color = if (!taskbarLocked && isPinned && idx in 0 until taskbarPinned.size - 1) Color.White else Color.Gray) },
-                                    enabled = !taskbarLocked && isPinned && idx in 0 until taskbarPinned.size - 1,
-                                    onClick = { taskbarPinned.add(idx + 1, taskbarPinned.removeAt(idx)); pinnedMenuFor = null }
-                                )
-                                if (isPinned) {
-                                    DropdownMenuItem(
-                                        text = { Text("Lepas sematan", fontSize = 11.sp, color = if (taskbarLocked) Color.Gray else Color.White) },
-                                        enabled = !taskbarLocked,
-                                        onClick = { taskbarPinned.remove(win); pinnedMenuFor = null }
-                                    )
-                                } else {
-                                    DropdownMenuItem(
-                                        text = { Text("Sematkan ke taskbar", fontSize = 11.sp, color = Color.White) },
-                                        enabled = !taskbarLocked,
-                                        onClick = { taskbarPinned.add(win); pinnedMenuFor = null }
+                                        onLongPress = { pinnedMenuFor = win }
                                     )
                                 }
-                                Divider(color = Color(0xFF3A3A3A))
-                                DropdownMenuItem(
-                                    text = { Text(if (taskbarLocked) "🔓 Buka kunci taskbar" else "🔒 Kunci taskbar", fontSize = 11.sp, color = Color(0xFFFFC107)) },
-                                    onClick = { taskbarLocked = !taskbarLocked; pinnedMenuFor = null }
-                                )
-                            }
+                        ) {
+                            Icon(
+                                getWindowIcon(win),
+                                contentDescription = getWindowTitle(win),
+                                tint = if (isOpen) Win11Accent else Color(0xFFE8E8E8),
+                                modifier = Modifier.size(19.dp)
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Box(
+                                modifier = Modifier
+                                    .padding(bottom = 3.dp)
+                                    .width(if (isOpen) 14.dp else if (isRunning) 6.dp else 0.dp)
+                                    .height(3.dp)
+                                    .background(
+                                        if (isOpen || isRunning) Win11Accent else Color.Transparent,
+                                        RoundedCornerShape(2.dp)
+                                    )
+                            )
                         }
                     }
                 }
+
+                // ===== v1.8.1 — panel aksi taskbar (Box biasa, anti Popup-crash ColorOS) =====
+                val menuWin = pinnedMenuFor
+                if (menuWin != null) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .offset(y = (-48).dp)
+                            .zIndex(50f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Win11Card)
+                            .border(1.dp, Color(0xFF3A3A3A), RoundedCornerShape(10.dp))
+                            .width(210.dp)
+                    ) {
+                        val isPinn = taskbarPinned.contains(menuWin)
+                        val idxP = taskbarPinned.indexOf(menuWin)
+                        if (taskbarLocked) {
+                            Text("🔒 Taskbar terkunci — buka kunci dulu", fontSize = 9.sp, color = Color(0xFF808080), modifier = Modifier.padding(10.dp, 6.dp))
+                        }
+                        TaskMenuItem("Buka") { pinnedMenuFor = null; minimizedWindows.remove(menuWin); openWin(menuWin) }
+                        TaskMenuItem("◄ Geser kiri", enabled = !taskbarLocked && isPinn && idxP > 0) { taskbarPinned.add(idxP - 1, taskbarPinned.removeAt(idxP)); pinnedMenuFor = null }
+                        TaskMenuItem("Geser kanan ►", enabled = !taskbarLocked && isPinn && idxP in 0 until taskbarPinned.size - 1) { taskbarPinned.add(idxP + 1, taskbarPinned.removeAt(idxP)); pinnedMenuFor = null }
+                        if (isPinn) {
+                            TaskMenuItem("Lepas sematan", enabled = !taskbarLocked) { taskbarPinned.remove(menuWin); pinnedMenuFor = null }
+                        } else {
+                            TaskMenuItem("Sematkan ke taskbar", enabled = !taskbarLocked) { taskbarPinned.add(menuWin); pinnedMenuFor = null }
+                        }
+                        TaskMenuItem(if (taskbarLocked) "🔓 Buka kunci taskbar" else "🔒 Kunci taskbar") { taskbarLocked = !taskbarLocked; pinnedMenuFor = null }
+                        TaskMenuItem("Tutup panel") { pinnedMenuFor = null }
+                    }
+                }
+
 
                 // Kanan: tray — absolute end
                 Row(
@@ -2074,6 +2094,16 @@ fun WineDesktopSim(
                             (context as? android.app.Activity)?.requestedOrientation = if (landscapeLocked) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
                         }
                         QsTile(icon = Icons.Default.Lock, label = "Kunci Bar", on = taskbarLocked, modifier = Modifier.weight(1f)) { taskbarLocked = !taskbarLocked }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        QsTile(icon = Icons.Default.OpenInNew, label = "Overlay", on = Settings.canDrawOverlays(context), modifier = Modifier.weight(1f)) {
+                            try { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                        }
+                        QsTile(icon = Icons.Default.Shield, label = "Safe Mode", on = safeMode, modifier = Modifier.weight(1f)) {
+                            crashPrefs.edit().putBoolean("safe_next_mode", !safeMode).apply()
+                            android.widget.Toast.makeText(context, if (!safeMode) "Safe Mode AKTIF setelah mulai ulang app" else "Mode NORMAL setelah mulai ulang app", android.widget.Toast.LENGTH_LONG).show()
+                        }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     // Volume NYATA — mengubah volume media Android
@@ -5235,4 +5265,60 @@ fun VmBuilderWindow(
             }
         }
     }
+}
+
+
+// ===== v1.8.1 — breadcrumb anti-FC =====
+fun crumb(context: android.content.Context, tag: String) {
+    try {
+        val p = context.getSharedPreferences("RofwinCrash", android.content.Context.MODE_PRIVATE)
+        val old = p.getString("crumbs", "") ?: ""
+        val line = if (old.isEmpty()) tag else old + ">" + tag
+        p.edit().putString("crumbs", line.takeLast(220)).apply()
+    } catch (_: Exception) {}
+}
+
+// ===== v1.8.1 — layar error (menggantikan FC senyap) =====
+@Composable
+fun CrashScreen(text: String, onClose: () -> Unit) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF2B0A0A)).padding(18.dp)) {
+        Text("Rofwin MENANGKAP error (bukan FC senyap) — screenshot / salin lalu kirim ke pengembang:", color = Color(0xFFFF8A80), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).background(Color.Black.copy(alpha = 0.5f)).padding(8.dp)) {
+            Text(text, color = Color(0xFFFFCDD2), fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row {
+            Text(
+                "SALIN LOG", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFFF8A80)).clickable {
+                    try {
+                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("rofwin-crash", text))
+                        android.widget.Toast.makeText(context, "Log tersalin — paste ke chat pengembang", android.widget.Toast.LENGTH_LONG).show()
+                    } catch (_: Exception) {}
+                }.padding(horizontal = 12.dp, vertical = 8.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                "KEMBALI KE DASHBOARD", color = Color.White, fontSize = 12.sp,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF555555)).clickable { onClose() }.padding(horizontal = 12.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
+// ===== v1.8.1 — item menu panel taskbar =====
+@Composable
+fun TaskMenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Text(
+        label,
+        fontSize = 11.sp,
+        color = if (enabled) Color.White else Color.Gray,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    )
 }

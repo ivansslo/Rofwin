@@ -1,5 +1,40 @@
 # Changelog
 
+## v1.8.1 — Recovery & Diagnosis (anti-FC total)
+- Error boundary: exception komposisi desktop TAMPIL DI LAYAR (+ tombol salin log), bukan FC senyap
+- Crash Shield JVM → prefs RofwinCrash + filesDir/last_crash.txt + Panel Crash di Dashboard (BAGIKAN LOG / HAPUS & NORMAL)
+- Breadcrumb crumbs: A:onCreate > A:startPressed > D1:composed > R:start > R:ok > D2:live
+- Safe Mode (otomatis setelah crash): skip restore sesi, bubble & pinned lanjutan off, banner oranye + pulihkan normal; juga tile Safe Mode di Quick Settings
+- Taskbar: combinedClickable + DropdownMenu (Popup) → detectTapGestures + panel Box biasa (anti crash Popup ColorOS)
+- Dialog overlay auto frame-1 DIHAPUS → tile Overlay manual di Quick Settings
+- Bubble AI: shadow dihapus, dimatikan saat Safe Mode
+- SEMUA fitur v1.7.0 dipertahankan: MT5 Setup (download nyata) + login + WebTerminal, VM Builder + Auth + OCI Bridge SSH (JSch), APK Studio, AI Bubble/plugins, critical text, landscape, sesi autosave
+- versionCode 181
+
+
+## v1.8.0 — Pro Foundation (basis stabil 1.6.0)
+- Kode dikembalikan ke v1.6.0 yang terbukti OK di device; SEMUA fitur di-porting dengan aturan anti-FC
+- Auto-popup overlay frame-1 DIHAPUS (kini tile Overlay manual di QS); menu taskbar DropdownMenu→panel Box biasa (detectTapGestures); bubble disederhanakan + ditunda 1,5 dtk
+- Dipertahankan: landscape, taskbar move/lock, AI bubble+plugins, critical text, MT5 Setup (download nyata), MT5 login + WebTerminal REAL, VM Builder + Auth + OCI Bridge SSH nyata, APK Studio, crash shield + breadcrumbs + CrashAlertPanel, kernel-aware CPH1823 + OBB +50MB
+- versionCode 180
+
+
+## v1.7.2 — Hotfix & Diagnostic (Force Close v2)
+- **Dialog overlay DITUNDA 1,5 dtk** setelah desktop live — tersangka utama FC frame-1 di ColorOS (plugin popup saat boot desktop)
+- **Breadcrumb tracer NYATA**: jejak init (A:onCreate > A:startPressed > D1 > R > T > D2 > S) tersimpan — posisi mati terbaca setelah crash
+- **CrashAlertPanel di Dashboard**: log crash + jejak tampil langsung saat app dibuka — tombol BAGIKAN LOG (share intent), MULAI SAFE MODE, HAPUS
+- Safe Mode lebih minimal: bubble & pinned taskbar disembunyikan, bubble default mati
+- (re-apply penuh seluruh perbaikan v1.7.1: Crash Shield, Safe Mode, auto low-RAM, OBB tuning)
+- versionCode 172
+
+## v1.7.1 — Stability & OBB (Anti Force-Close)
+- Crash Shield NYATA: FC ditangkap → stack trace ke storage → boot berikutnya Safe Mode (loop FC putus)
+- Safe Mode: skip restore sesi + paksa low-RAM + banner penyebab crash (Pulihkan/Hapus log)
+- Auto low-RAM kernel-aware CPH1823 (isLowRamDevice/memoryClass/RAM ≤4,8GB) + largeHeap + resizeableActivity
+- Data OBB +50MB (`main.171.com.rofwin.obb`): kernel_tuning.json dibaca on-demand (tick/candle/autosave/bubble) — data pack keluar heap
+- Pacing adaptif low-RAM: tick 2600ms, candle 40, autosave 10 dtk; status OBB & mode kernel di boot screen
+- versionCode 171
+
 ## v1.7.0 — Pro Bridge Edition
 - Landscape NYATA semua device (manifest fullUser + tile Landscape QS + jendela adaptif wideScreen)
 - Taskbar interaktif NYATA: long-press → Buka/Geser◄►/Pin-Unpin/🔒Kunci (tersimpan di sesi)

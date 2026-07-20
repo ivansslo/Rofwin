@@ -13,8 +13,8 @@ android {
         applicationId = "com.rofwin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 170
-        versionName = "1.7.0"
+        versionCode = 181
+        versionName = "1.8.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -61,7 +61,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    // v1.7.0: SSH NYATA untuk OCI Bridge (jembatan lokal -> VM Oracle)
+    // v1.8.0: SSH NYATA untuk OCI Bridge (terbukti aman — Dashboard tetap jalan di 1.7.x)
     implementation("com.github.mwiede:jsch:0.2.24")
 
     testImplementation("junit:junit:4.13.2")

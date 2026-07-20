@@ -737,6 +737,9 @@ fun ContainerCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Start Wine Container", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
+
+            // ===== v1.8.1 — Panel Crash (log + Safe Mode) =====
+            CrashAlertPanel()
         }
     }
 }
@@ -1728,6 +1731,54 @@ fun ModuleCard(title: String, subtitle: String, description: String, icon: Image
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(status, fontSize = 11.sp, color = statusColor, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+
+// ===== v1.8.1 — Panel Crash di Dashboard =====
+@Composable
+fun CrashAlertPanel() {
+    val context = LocalContext.current
+    val cr = remember { context.getSharedPreferences("RofwinCrash", android.content.Context.MODE_PRIVATE) }
+    var crashTxt by remember { mutableStateOf(cr.getString("last_crash", "") ?: "") }
+    var crumbs by remember { mutableStateOf(cr.getString("crumbs", "") ?: "") }
+    var safeNext by remember { mutableStateOf(cr.getBoolean("safe_next_mode", false)) }
+    if (crashTxt.isNotEmpty() || crumbs.isNotEmpty() || safeNext) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF3B1A0A))
+                .border(1.dp, Color(0xFFFF8A80), RoundedCornerShape(10.dp))
+                .padding(10.dp)
+        ) {
+            Text("⚠ Panel Crash Rofwin", color = Color(0xFFFF8A80), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Text("jejak: " + (if (crumbs.isEmpty()) "-" else crumbs), color = Color(0xFFFFCC80), fontSize = 9.sp)
+            if (safeNext) Text("Safe Mode: AKTIF untuk start berikutnya", color = Color(0xFFFFCC80), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            if (crashTxt.isNotEmpty()) Text(crashTxt.take(700), color = Color(0xFFFFCDD2), fontSize = 8.sp, maxLines = 10, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                Text(
+                    "BAGIKAN LOG", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFFF8A80)).clickable {
+                        try {
+                            val it = android.content.Intent(android.content.Intent.ACTION_SEND)
+                            it.type = "text/plain"
+                            it.putExtra(android.content.Intent.EXTRA_TEXT, "ROFWIN CRASH v1.8.1\njejak: " + crumbs + "\n\n" + crashTxt)
+                            context.startActivity(android.content.Intent.createChooser(it, "Bagikan log crash Rofwin"))
+                        } catch (_: Exception) {}
+                    }.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "HAPUS & NORMAL", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFA5D6A7)).clickable {
+                        cr.edit().remove("last_crash").remove("crumbs").putBoolean("safe_next_mode", false).apply()
+                        crashTxt = ""; crumbs = ""; safeNext = false
+                    }.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
             }
         }
     }
