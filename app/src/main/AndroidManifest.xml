@@ -5,15 +5,18 @@
     <!-- v1.7.0: izin "Tampil di atas aplikasi lain" (diminta saat app dibuka) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- v1.8.2 — allowBackup dimatikan: melindungi API key & sesi dari ekstraksi backup.
+         usesCleartextTraffic=false: semua trafik wajib HTTPS. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Rofwin">
         <activity
-            android:name="com.winlator.MainActivity"
+            android:name="com.rofwin.MainActivity"
             android:exported="true"
             android:screenOrientation="fullUser"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"

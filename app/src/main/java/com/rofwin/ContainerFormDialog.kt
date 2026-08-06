@@ -1,4 +1,4 @@
-package com.winlator
+package com.rofwin
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

@@ -16,7 +16,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = java.net.URI("https://jitpack.io") }
+        // JitPack dihapus (v1.8.2) — semua dependensi kini dari repo tepercaya (supply-chain hygiene)
     }
 }
 

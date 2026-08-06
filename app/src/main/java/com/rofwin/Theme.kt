@@ -1,4 +1,4 @@
-package com.winlator
+package com.rofwin
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme

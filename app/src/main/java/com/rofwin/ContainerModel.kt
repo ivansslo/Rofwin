@@ -1,4 +1,4 @@
-package com.winlator
+package com.rofwin
 
 import kotlinx.serialization.Serializable
 

@@ -1,4 +1,4 @@
-package com.winlator
+package com.rofwin
 
 data class VirtualControlElement(
     val name: String,

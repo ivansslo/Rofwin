@@ -1,4 +1,4 @@
-package com.winlator
+package com.rofwin
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -59,8 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.shadow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -265,23 +267,49 @@ val AI_PLUGINS = listOf(
 )
 
 // ===== v1.7.0 — SSH NYATA (JSch) — jembatan lokal -> OCI =====
-fun sshExec(host: String, port: Int, user: String, pass: String, cmd: String, timeoutMs: Int = 9000): Pair<Boolean, String> = try {
+// ===== v1.8.2 — HOST-KEY PINNING (TOFU): fingerprint SHA-256 server disimpan saat koneksi
+// pertama (trust-on-first-use), diverifikasi pada setiap koneksi berikutnya. Bila fingerprint
+// berubah, koneksi DITOLAK — melindungi dari serangan MITM / server palsu. =====
+fun sshExec(host: String, port: Int, user: String, pass: String, cmd: String, timeoutMs: Int = 9000, kh: android.content.SharedPreferences? = null): Pair<Boolean, String> {
+    return try {
     val jsch = com.jcraft.jsch.JSch()
     val session = jsch.getSession(user, host, port)
     session.setPassword(pass)
     val cfg = java.util.Properties()
+    // Catatan: tetap "no" agar handshake tidak gagal — tapi fingerprint diverifikasi MANUAL
+    // di bawah (TOFU), jadi MITM setelah pin tersimpan tetap ketolak.
     cfg["StrictHostKeyChecking"] = "no"
     session.setConfig(cfg)
     session.connect(timeoutMs)
+    val hk = session.hostKey
+    val fp = hk?.let {
+        try {
+            val blob = android.util.Base64.decode(it.key, android.util.Base64.NO_WRAP)
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            "SHA256:" + android.util.Base64.encodeToString(md.digest(blob), android.util.Base64.NO_WRAP).trimEnd('=')
+        } catch (_: Exception) { "?" }
+    } ?: "?"
+    if (kh != null && hk != null) {
+        val k = "ssh_kh_${host}_${port}"
+        when (val saved = kh.getString(k, null)) {
+            null -> kh.edit().putString(k, fp).apply() // first use -> pin
+            fp -> Unit // cocok -> lanjut
+            else -> {
+                session.disconnect()
+                return false to "🔴 HOST KEY BERUBAH — koneksi DITOLAK (kemungkinan MITM/server diganti)\ntersimpan: $saved\nsekarang : $fp\nHapus pin di prefs ${k} untuk mempercayai ulang."
+            }
+        }
+    }
     val ch = session.openChannel("exec") as com.jcraft.jsch.ChannelExec
     ch.setCommand(cmd)
     ch.connect(timeoutMs)
     val raw = ch.inputStream.readBytes().toString(Charsets.UTF_8)
     ch.disconnect()
     session.disconnect()
-    true to raw.trim().ifBlank { "(tanpa output)" }
-} catch (e: Exception) {
-    false to "ERROR: ${e.message}"
+    true to (raw.trim().ifBlank { "(tanpa output)" } + "\n🔑 host-key $fp ✔")
+    } catch (e: Exception) {
+        false to "ERROR: ${e.message}"
+    }
 }
 
 // ===== v1.7.0 — Downloader NYATA (HTTP -> file lokal, dengan progress) =====
@@ -313,6 +341,102 @@ fun downloadToFile(url: String, dest: java.io.File, onProgress: (Long) -> Unit):
     }
 } catch (e: Exception) {
     false to "ERROR: ${e.message}"
+}
+
+// ===== v1.8.2 — snapshot sesi: memungkinkan parse & rakit JSON dilakukan DI LUAR main thread
+// (v1.8.1 ke bawah melakukan parse/serialize di UI thread -> ANR "aplikasi tidak merespons"
+// di device low-end seperti CPH1823 saat sesi membesar — penyebab utama 'stuck/FC') =====
+class SessionSnap(
+    val fs: Map<String, List<SimFile>>, val files: Map<String, String>, val eas: List<String>,
+    val balance: Float?, val ticket: Long?, val positions: List<Mt5Pos>,
+    val history: List<String>, val journal: List<String>, val activeEAs: Map<String, String>,
+    val pinned: List<String>?, val tblock: Boolean?, val plugins: Map<String, Boolean>,
+    val bubble: Boolean?, val mt5account: String?, val mt5installed: Boolean?
+)
+
+fun parseSessionBlob(blob: String): SessionSnap {
+    val root = Json.parseToJsonElement(blob).jsonObject
+    val fs = LinkedHashMap<String, List<SimFile>>()
+    root["fs"]?.jsonObject?.forEach { (path, arr) ->
+        fs[path] = arr.jsonArray.map { el ->
+            val o = el.jsonObject
+            SimFile(o["n"]!!.jsonPrimitive.content, o["d"]!!.jsonPrimitive.content == "1", o["s"]!!.jsonPrimitive.content)
+        }
+    }
+    val files = LinkedHashMap<String, String>()
+    root["files"]?.jsonObject?.forEach { (p, v) -> files[p] = v.jsonPrimitive.content }
+    val eas = mutableListOf<String>()
+    root["eas"]?.jsonArray?.forEach { e -> eas.add(e.jsonPrimitive.content) }
+    val positions = mutableListOf<Mt5Pos>()
+    root["positions"]?.jsonArray?.forEach { el ->
+        val o = el.jsonObject
+        positions.add(Mt5Pos(o["t"]!!.jsonPrimitive.content.toLong(), o["b"]!!.jsonPrimitive.content == "1", o["s"]!!.jsonPrimitive.content, o["l"]!!.jsonPrimitive.content.toDouble(), o["p"]!!.jsonPrimitive.content.toDouble()))
+    }
+    val history = mutableListOf<String>(); root["history"]?.jsonArray?.forEach { history.add(it.jsonPrimitive.content) }
+    val journal = mutableListOf<String>(); root["journal"]?.jsonArray?.forEach { journal.add(it.jsonPrimitive.content) }
+    val act = LinkedHashMap<String, String>(); root["activeEAs"]?.jsonObject?.forEach { (ea, sym) -> act[ea] = sym.jsonPrimitive.content }
+    val pinned = root["pinned"]?.jsonArray?.map { it.jsonPrimitive.content }
+    val plug = LinkedHashMap<String, Boolean>(); root["plugins"]?.jsonObject?.forEach { (k, v) -> plug[k] = v.jsonPrimitive.content == "1" }
+    return SessionSnap(
+        fs, files, eas,
+        root["balance"]?.jsonPrimitive?.content?.toFloatOrNull(),
+        root["ticket"]?.jsonPrimitive?.content?.toLongOrNull(),
+        positions, history, journal, act, pinned,
+        root["tblock"]?.jsonPrimitive?.content?.let { it == "1" }, plug,
+        root["bubble"]?.jsonPrimitive?.content?.let { it == "1" },
+        root["mt5account"]?.jsonPrimitive?.content,
+        root["mt5installed"]?.jsonPrimitive?.content?.let { it == "1" }
+    )
+}
+
+fun buildSessionJson(
+    fs: Map<String, List<SimFile>>, files: Map<String, String>, eas: List<String>,
+    balance: Float, ticket: Long, positions: List<Mt5Pos>,
+    history: List<String>, journal: List<String>, activeEAs: Map<String, String>,
+    pinned: List<String>, locked: Boolean, plugins: Map<String, Boolean>,
+    bubble: Boolean, account: String, installed: Boolean
+): String {
+    val sb = StringBuilder()
+    sb.append("{\"fs\":{")
+    var first = true
+    fs.forEach { (path, list) ->
+        if (!first) sb.append(",")
+        first = false
+        sb.append(jsonStr(path)).append(":[")
+        list.forEachIndexed { i, f ->
+            if (i > 0) sb.append(",")
+            sb.append("{\"n\":").append(jsonStr(f.name)).append(",\"d\":\"").append(if (f.isDirectory) "1" else "0").append("\",\"s\":").append(jsonStr(f.size)).append("}")
+        }
+        sb.append("]")
+    }
+    sb.append("},\"files\":{")
+    first = true
+    files.forEach { (p, c) -> if (!first) sb.append(","); first = false; sb.append(jsonStr(p)).append(":").append(jsonStr(c)) }
+    sb.append("},\"eas\":[")
+    eas.forEachIndexed { i, ea -> if (i > 0) sb.append(","); sb.append(jsonStr(ea)) }
+    sb.append("],\"balance\":\"").append(balance).append("\",\"ticket\":\"").append(ticket).append("\",\"positions\":[")
+    positions.forEachIndexed { i, p ->
+        if (i > 0) sb.append(",")
+        sb.append("{\"t\":\"").append(p.ticket).append("\",\"b\":\"").append(if (p.buy) "1" else "0").append("\",\"s\":\"").append(p.sym).append("\",\"l\":\"").append(p.lots).append("\",\"p\":\"").append(p.open).append("\"}")
+    }
+    sb.append("],\"history\":[")
+    history.forEachIndexed { i, h -> if (i > 0) sb.append(","); sb.append(jsonStr(h)) }
+    sb.append("],\"journal\":[")
+    journal.forEachIndexed { i, j -> if (i > 0) sb.append(","); sb.append(jsonStr(j)) }
+    sb.append("],\"activeEAs\":{")
+    first = true
+    activeEAs.forEach { (ea, sym) -> if (!first) sb.append(","); first = false; sb.append(jsonStr(ea)).append(":").append(jsonStr(sym)) }
+    sb.append("}")
+    sb.append(",\"pinned\":[")
+    pinned.forEachIndexed { i, w -> if (i > 0) sb.append(","); sb.append(jsonStr(w)) }
+    sb.append("],\"tblock\":\"").append(if (locked) "1" else "0").append("\",\"plugins\":{")
+    var fpnd = true
+    plugins.forEach { (k, v) -> if (!fpnd) sb.append(","); fpnd = false; sb.append(jsonStr(k)).append(":\"").append(if (v) "1" else "0").append("\"") }
+    sb.append("},\"bubble\":\"").append(if (bubble) "1" else "0")
+    sb.append("\",\"mt5account\":").append(jsonStr(account))
+    sb.append(",\"mt5installed\":\"").append(if (installed) "1" else "0").append("\"")
+    sb.append("}")
+    return sb.toString()
 }
 
 // ===== v1.7.0 — helper FS simulasi (folder rekursif + file dengan ukuran) =====
@@ -744,101 +868,62 @@ private fun WineDesktopSimInner(
     // ===== Sesi tersave di storage (autosave tiap 5 dtk — unlimited, tahan tutup app) =====
     LaunchedEffect(Unit) {
         crumb(context, "R:start")
-        // ---- restore ----
-        if (!safeMode) prefs.getString("rofwin_session_v2", null)?.let { blob ->
-            try {
-                val root = kotlinx.serialization.json.Json.parseToJsonElement(blob).jsonObject
-                root["fs"]?.jsonObject?.forEach { (path, arr) ->
-                    simulatedFiles[path] = arr.jsonArray.map { el ->
-                        val o = el.jsonObject
-                        SimFile(o["n"]!!.jsonPrimitive.content, o["d"]!!.jsonPrimitive.content == "1", o["s"]!!.jsonPrimitive.content)
-                    }
-                }
-                root["files"]?.jsonObject?.forEach { (p, v) -> fileContents[p] = v.jsonPrimitive.content }
-                root["eas"]?.jsonArray?.forEach { e ->
-                    val n = e.jsonPrimitive.content
-                    if (!expertAdvisors.contains(n)) expertAdvisors.add(n)
-                }
-                root["balance"]?.jsonPrimitive?.content?.toFloatOrNull()?.let { mt5Balance = it }
-                root["ticket"]?.jsonPrimitive?.content?.toLongOrNull()?.let { mt5Ticket = it }
-                root["positions"]?.jsonArray?.forEach { el ->
-                    val o = el.jsonObject
-                    mt5Positions.add(Mt5Pos(o["t"]!!.jsonPrimitive.content.toLong(), o["b"]!!.jsonPrimitive.content == "1", o["s"]!!.jsonPrimitive.content, o["l"]!!.jsonPrimitive.content.toDouble(), o["p"]!!.jsonPrimitive.content.toDouble()))
-                }
-                root["history"]?.jsonArray?.forEach { mt5History.add(it.jsonPrimitive.content) }
-                root["journal"]?.jsonArray?.forEach { mt5Journal.add(it.jsonPrimitive.content) }
-                root["activeEAs"]?.jsonObject?.forEach { (ea, sym) -> mt5ActiveEAs[ea] = sym.jsonPrimitive.content }
-                root["pinned"]?.jsonArray?.let { arr ->
-                    taskbarPinned.clear()
-                    arr.forEach { el -> try { taskbarPinned.add(DesktopWindow.valueOf(el.jsonPrimitive.content)) } catch (_: Exception) {} }
-                    if (taskbarPinned.isEmpty()) taskbarPinned.add(DesktopWindow.MY_COMPUTER)
-                }
-                root["tblock"]?.jsonPrimitive?.content?.let { taskbarLocked = it == "1" }
-                root["plugins"]?.jsonObject?.forEach { (k, v) -> aiPluginsOn[k] = v.jsonPrimitive.content == "1" }
-                root["bubble"]?.jsonPrimitive?.content?.let { aiBubbleOn = it == "1" }
-                root["mt5account"]?.jsonPrimitive?.content?.let { mt5Account = it }
-                root["mt5installed"]?.jsonPrimitive?.content?.let { mt5Installed = it == "1" }
-                mt5Journal.add(0, "✔ sesi dipulihkan dari storage (file, FS, positions, EA)")
-            } catch (_: Exception) {}
+        // ---- restore (v1.8.2: baca + parse DI LUAR main thread -> anti-ANR/stuck) ----
+        val blob = if (!safeMode) withContext(Dispatchers.IO) {
+            try { prefs.getString("rofwin_session_v2", null) } catch (_: Exception) { null }
+        } else null
+        val snap = blob?.let { b -> withContext(Dispatchers.Default) { try { parseSessionBlob(b) } catch (_: Exception) { null } } }
+        snap?.let { s ->
+            s.fs.forEach { (path, list) -> simulatedFiles[path] = list }
+            fileContents.putAll(s.files)
+            s.eas.forEach { n -> if (!expertAdvisors.contains(n)) expertAdvisors.add(n) }
+            s.balance?.let { mt5Balance = it }
+            s.ticket?.let { mt5Ticket = it }
+            mt5Positions.addAll(s.positions)
+            mt5History.addAll(s.history)
+            mt5Journal.addAll(s.journal)
+            mt5ActiveEAs.putAll(s.activeEAs)
+            s.pinned?.let { arr ->
+                taskbarPinned.clear()
+                arr.forEach { el -> try { taskbarPinned.add(DesktopWindow.valueOf(el)) } catch (_: Exception) {} }
+                if (taskbarPinned.isEmpty()) taskbarPinned.add(DesktopWindow.MY_COMPUTER)
+            }
+            s.tblock?.let { taskbarLocked = it }
+            aiPluginsOn.putAll(s.plugins)
+            s.bubble?.let { aiBubbleOn = it }
+            s.mt5account?.let { mt5Account = it }
+            s.mt5installed?.let { mt5Installed = it }
+            mt5Journal.add(0, "✔ sesi dipulihkan dari storage (file, FS, positions, EA) [io-thread]")
         }
         crumb(context, "R:ok")
-        // ---- autosave loop ----
+        // ---- autosave loop (v1.8.2 anti-ANR: snapshot state di Main, rakit JSON di Default, tulis di IO) ----
         while (true) {
             delay(5000)
             try {
-                val sb = StringBuilder()
-                sb.append("{\"fs\":{")
-                var first = true
-                simulatedFiles.forEach { (path, list) ->
-                    if (!first) sb.append(",")
-                    first = false
-                    sb.append(jsonStr(path)).append(":[")
-                    list.forEachIndexed { i, f ->
-                        if (i > 0) sb.append(",")
-                        sb.append("{\"n\":").append(jsonStr(f.name)).append(",\"d\":\"").append(if (f.isDirectory) "1" else "0").append("\",\"s\":").append(jsonStr(f.size)).append("}")
-                    }
-                    sb.append("]")
+                // 1) snapshot state (cepat, di main thread)
+                val fsCopy = simulatedFiles.toMap()
+                val filesCopy = fileContents.toMap()
+                val easCopy = expertAdvisors.toList()
+                val bal = mt5Balance
+                val tic = mt5Ticket
+                val posCopy = mt5Positions.toList()
+                val histCopy = mt5History.take(40)
+                val jourCopy = mt5Journal.take(40)
+                val actCopy = mt5ActiveEAs.toMap()
+                val pinCopy = taskbarPinned.map { it.name }
+                val lock = taskbarLocked
+                val plugCopy = aiPluginsOn.toMap()
+                val bub = aiBubbleOn
+                val acc = mt5Account
+                val inst = mt5Installed
+                // 2) rakit JSON di luar UI thread
+                val out = withContext(Dispatchers.Default) {
+                    buildSessionJson(fsCopy, filesCopy, easCopy, bal, tic, posCopy, histCopy, jourCopy, actCopy, pinCopy, lock, plugCopy, bub, acc, inst)
                 }
-                sb.append("},\"files\":{")
-                first = true
-                fileContents.forEach { (p, c) ->
-                    if (!first) sb.append(",")
-                    first = false
-                    sb.append(jsonStr(p)).append(":").append(jsonStr(c))
+                // 3) tulis ke disk di luar UI thread
+                withContext(Dispatchers.IO) {
+                    prefs.edit().putString("rofwin_session_v2", out).apply()
                 }
-                sb.append("},\"eas\":[")
-                expertAdvisors.forEachIndexed { i, ea -> if (i > 0) sb.append(","); sb.append(jsonStr(ea)) }
-                sb.append("],\"balance\":\"").append(mt5Balance).append("\",\"ticket\":\"").append(mt5Ticket).append("\",\"positions\":[")
-                mt5Positions.forEachIndexed { i, p ->
-                    if (i > 0) sb.append(",")
-                    sb.append("{\"t\":\"").append(p.ticket).append("\",\"b\":\"").append(if (p.buy) "1" else "0").append("\",\"s\":\"").append(p.sym).append("\",\"l\":\"").append(p.lots).append("\",\"p\":\"").append(p.open).append("\"}")
-                }
-                sb.append("],\"history\":[")
-                mt5History.take(40).forEachIndexed { i, h -> if (i > 0) sb.append(","); sb.append(jsonStr(h)) }
-                sb.append("],\"journal\":[")
-                mt5Journal.take(40).forEachIndexed { i, j -> if (i > 0) sb.append(","); sb.append(jsonStr(j)) }
-                sb.append("],\"activeEAs\":{")
-                first = true
-                mt5ActiveEAs.forEach { (ea, sym) ->
-                    if (!first) sb.append(",")
-                    first = false
-                    sb.append(jsonStr(ea)).append(":").append(jsonStr(sym))
-                }
-                sb.append("}")
-                sb.append(",\"pinned\":[")
-                taskbarPinned.forEachIndexed { i, w -> if (i > 0) sb.append(","); sb.append(jsonStr(w.name)) }
-                sb.append("],\"tblock\":\"").append(if (taskbarLocked) "1" else "0").append("\",\"plugins\":{")
-                var fpnd = true
-                aiPluginsOn.forEach { (k, v) ->
-                    if (!fpnd) sb.append(",")
-                    fpnd = false
-                    sb.append(jsonStr(k)).append(":\"").append(if (v) "1" else "0").append("\"")
-                }
-                sb.append("},\"bubble\":\"").append(if (aiBubbleOn) "1" else "0")
-                sb.append("\",\"mt5account\":").append(jsonStr(mt5Account))
-                sb.append(",\"mt5installed\":\"").append(if (mt5Installed) "1" else "0").append("\"")
-                sb.append("}")
-                prefs.edit().putString("rofwin_session_v2", sb.toString()).apply()
             } catch (_: Exception) {}
         }
     }
@@ -934,7 +1019,7 @@ private fun WineDesktopSimInner(
                     )
                 )
                 Text(
-                    text = "Pro Bridge Edition 1.7 — Build 26200.rofwin.pro",
+                    text = "Recovery & Security Edition 1.8.2 — Build 26200.rofwin.rescue",
                     style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
@@ -3666,15 +3751,29 @@ fun BrowserWindow() {
         Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White)) {
             AndroidView(
                 factory = { ctx ->
-                    WebView(ctx).apply {
-                        webViewClient = WebViewClient()
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.setSupportZoom(true)
-                        settings.builtInZoomControls = true
-                        settings.displayZoomControls = false
-                        loadUrl(url)
-                        webView = this
+                    // v1.8.2 — anti-FC: di ROM tertentu provider WebView bisa rusak/hilang;
+                    // tampilkan pesan fallback alih-alih force close.
+                    try {
+                        WebView(ctx).apply {
+                            webViewClient = WebViewClient()
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            // hardening v1.8.2: konten lokal tidak diperlukan — semua halaman via HTTPS
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
+                            settings.setSupportZoom(true)
+                            settings.builtInZoomControls = true
+                            settings.displayZoomControls = false
+                            loadUrl(url)
+                            webView = this
+                        }
+                    } catch (t: Throwable) {
+                        webView = null
+                        android.widget.TextView(ctx).apply {
+                            text = "⚠ WebView tidak tersedia/rusak di device ini.\n${t.message}"
+                            setTextColor(android.graphics.Color.DKGRAY)
+                            setPadding(28, 28, 28, 28)
+                        }
                     }
                 },
                 update = {
@@ -4363,7 +4462,9 @@ fun RocAiWindow(
     val context = LocalContext.current
     val aiPrefs = remember { context.getSharedPreferences("RofwinAI", android.content.Context.MODE_PRIVATE) }
     var apiBase by remember { mutableStateOf(aiPrefs.getString("base", "https://api.groq.com/openai/v1") ?: "https://api.groq.com/openai/v1") }
-    var apiKey by remember { mutableStateOf(aiPrefs.getString("key", "") ?: "") }
+    // v1.8.2 — API key tersimpan TERENKRIPSI (SecureBox / Android Keystore);
+    // nilai legacy plaintext dari v1.8.1 ke bawah tetap terbaca & otomatis terenkripsi saat diedit.
+    var apiKey by remember { mutableStateOf(SecureBox.decryptFrom(aiPrefs.getString("key", "") ?: "")) }
     var model by remember { mutableStateOf(aiPrefs.getString("model", "llama-3.3-70b-versatile") ?: "llama-3.3-70b-versatile") }
     var showSettings by remember { mutableStateOf(false) }
     val chat = remember {
@@ -4568,7 +4669,7 @@ fun RocAiWindow(
             Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1B2330)).padding(8.dp)) {
                 OutlinedTextField(
                     value = apiKey,
-                    onValueChange = { apiKey = it; aiPrefs.edit().putString("key", it).apply() },
+                    onValueChange = { apiKey = it; aiPrefs.edit().putString("key", SecureBox.encryptTo(it)).apply() },
                     label = { Text("API Key (Groq: gsk_... / OpenAI-compatible)", fontSize = 10.sp) },
                     singleLine = true,
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
@@ -5104,7 +5205,8 @@ fun VmBuilderWindow(
         ociBusy = true
         ociLogs.add(0, "→ [$tag] $cmd")
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val (ok, out) = sshExec(ociHost.trim(), ociPort.toIntOrNull() ?: 22, ociUser.trim(), ociPass, cmd)
+            // v1.8.2 — kh = prefs -> host-key pinning TOFU aktif (anti-MITM)
+            val (ok, out) = sshExec(ociHost.trim(), ociPort.toIntOrNull() ?: 22, ociUser.trim(), ociPass, cmd, kh = prefs)
             ociLogs.add(0, (if (ok) "✔ " else "🔴 ") + out.take(700))
             ociBusy = false
         }

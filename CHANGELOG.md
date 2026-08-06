@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.8.2 — Security & Anti-ANR (rescue build)
+- **Anti-ANR (akar masalah "stuck/lanjut macet")**: restore sesi & autosave tiap 5 dtk yang sebelumnya merakit/parse JSON besar di UI thread kini dipindah ke thread IO/Default (snapshot di Main → rakit di Default → tulis di IO)
+- **Anti-FC WebView**: provider WebView rusak/hilang di ROM tertentu kini menampilkan pesan fallback, bukan force close; hardening `allowFileAccess/allowContentAccess = false`
+- **SSH OCI Bridge anti-MITM**: host-key pinning TOFU (trust-on-first-use) — fingerprint SHA-256 server dipin & diverifikasi tiap koneksi; perubahan fingerprint = koneksi ditolak
+- **API key AI terenkripsi**: disimpan AES-256/GCM via Android Keystore (SecureBox); nilai legacy plaintext tetap terbaca & otomatis migrasi saat diedit
+- **Manifest**: `allowBackup=false` (lindungi key & sesi dari ekstraksi backup), `usesCleartextTraffic=false` (wajib HTTPS)
+- **Build/CI**: workflow kini Java 21 + SDK 35 (sebelumnya Java 17 + SDK 34 → build gagal dengan `compileSdk 35`/`jvmTarget 21`); JitPack dihapus (JSch dari Maven Central)
+- **Namespace** `com.winlator` → **`com.rofwin`** (konsisten dengan applicationId)
+- **R8/minify + shrinkResources aktif** untuk release (rules aman untuk serialization/JSch/enum)
+- **Housekeeping**: `metadata.json` (artefak AI Studio) dihapus; `FUNDING.yml` dibersihkan dari akun upstream; README ditulis ulang sesuai kondisi repo
+- versionCode 182
+
+
 ## v1.8.1 — Recovery & Diagnosis (anti-FC total)
 - Error boundary: exception komposisi desktop TAMPIL DI LAYAR (+ tombol salin log), bukan FC senyap
 - Crash Shield JVM → prefs RofwinCrash + filesDir/last_crash.txt + Panel Crash di Dashboard (BAGIKAN LOG / HAPUS & NORMAL)

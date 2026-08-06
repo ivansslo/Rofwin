@@ -1,4 +1,4 @@
-package com.winlator
+package com.rofwin
 import android.content.Context
 
 import androidx.compose.animation.AnimatedVisibility

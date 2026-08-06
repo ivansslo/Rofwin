@@ -6,15 +6,15 @@ plugins {
 }
 
 android {
-    namespace = "com.winlator"
+    namespace = "com.rofwin"
     compileSdk = 35
 
     defaultConfig {
         applicationId = "com.rofwin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 181
-        versionName = "1.8.1"
+        versionCode = 182
+        versionName = "1.8.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -24,7 +24,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // v1.8.2 — R8 aktif: APK lebih kecil & lebih sulit di-reverse.
+            // Kode app di-keep penuh (lihat proguard-rules.pro) agar refleksi kotlinx.serialization aman.
+            // Build di mesin RAM kecil? matikan sementara: ./gradlew assembleRelease -Profwin.minify=false
+            isMinifyEnabled = (findProperty("rofwin.minify") as String?) != "false"
+            isShrinkResources = isMinifyEnabled
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -61,7 +65,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    // v1.8.0: SSH NYATA untuk OCI Bridge (terbukti aman — Dashboard tetap jalan di 1.7.x)
+    // v1.8.0: SSH NYATA untuk OCI Bridge — via Maven Central (bukan JitPack) sejak v1.8.2
     implementation("com.github.mwiede:jsch:0.2.24")
 
     testImplementation("junit:junit:4.13.2")
