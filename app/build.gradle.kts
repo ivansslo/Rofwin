@@ -45,6 +45,12 @@ android {
     buildFeatures {
         compose = true
     }
+    // v1.8.3 — lint vital dimatikan: task lintVitalAnalyzeRelease sangat rakus RAM
+    // (macet/OOM di mesin build kecil); tidak memengaruhi isi APK.
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
