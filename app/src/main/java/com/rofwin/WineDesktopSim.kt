@@ -1019,7 +1019,7 @@ private fun WineDesktopSimInner(
                     )
                 )
                 Text(
-                    text = "Recovery & Security Edition 1.8.2 — Build 26200.rofwin.rescue",
+                    text = "Recovery & Security Edition 1.8.3 — Build 26200.rofwin.rescue",
                     style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
@@ -1094,11 +1094,13 @@ private fun WineDesktopSimInner(
                 }
             }
             // Desktop Icon Grid (scroll agar tidak overflow di layar kecil)
+            // v1.8.3 — FIX FC: duplikat .verticalScroll() DIHAPUS.
+            // Dua scrollable searah dalam satu rantai membuat scrollable dalam
+            // diukur dengan max-height = tak hingga -> IllegalStateException (FC tepat setelah boot).
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(100.dp)
-                    .verticalScroll(rememberScrollState())
                     .verticalScroll(rememberScrollState())
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)

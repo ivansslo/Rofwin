@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.8.3 — Hotfix FC setelah boot (Double-Scroll)
+- **FIX UTAMA (dari log crash user)**: `IllegalStateException: Vertically scrollable component was measured with an infinity maximum height constraints` — Desktop Icon Grid punya `.verticalScroll()` GANDA dalam satu rantai modifier; scrollable dalam diukur dengan max-height tak hingga → FC deterministik tepat setelah boot (Safe Mode pun tak menolong, karena grid ikon selalu dirender). Duplikat dihapus.
+- Semua perbaikan v1.8.2 dipertahankan (anti-ANR, SecureBox, SSH TOFU pinning, WebView guard, namespace com.rofwin, CI Java 21)
+- versionCode 183
+
+
 ## v1.8.2 — Security & Anti-ANR (rescue build)
 - **Anti-ANR (akar masalah "stuck/lanjut macet")**: restore sesi & autosave tiap 5 dtk yang sebelumnya merakit/parse JSON besar di UI thread kini dipindah ke thread IO/Default (snapshot di Main → rakit di Default → tulis di IO)
 - **Anti-FC WebView**: provider WebView rusak/hilang di ROM tertentu kini menampilkan pesan fallback, bukan force close; hardening `allowFileAccess/allowContentAccess = false`
