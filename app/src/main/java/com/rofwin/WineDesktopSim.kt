@@ -69,6 +69,7 @@ import android.provider.Settings
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.serialization.json.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -261,7 +262,7 @@ fun detectCritical(text: String): Boolean = CRITICAL_PATTERN.containsMatchIn(tex
 data class AiPlugin(val id: String, val name: String, val desc: String)
 val AI_PLUGINS = listOf(
     AiPlugin("eagen", "EA Generator", "AI menulis file .mq5 utuh dari deskripsi"),
-    AiPlugin("rocsync", "ROC Sync", "Tarik struktur terbaru repo ivansslo/rocagents"),
+    AiPlugin("rocsync", "ROC Sync", "Tarik struktur terbaru repo ivansslo/RocAgent"),
     AiPlugin("digest", "Market Digest", "Sisipkan konteks pasar live ke jawaban AI"),
     AiPlugin("critical", "Critical Alert", "Sorot teks kritis (error, margin call, dsb)")
 )
@@ -342,6 +343,27 @@ fun downloadToFile(url: String, dest: java.io.File, onProgress: (Long) -> Unit):
 } catch (e: Exception) {
     false to "ERROR: ${e.message}"
 }
+
+// ===== v1.9.0 — jaringan NYATA dari device Android (untuk taskbar tray & terminal) =====
+fun deviceIps(): List<String> = try {
+    java.net.NetworkInterface.getNetworkInterfaces().toList()
+        .filter { it.isUp && !it.isLoopback }
+        .flatMap { ni -> ni.inetAddresses.toList().filterIsInstance<java.net.Inet4Address>() }
+        .map { it.hostAddress ?: "?" }
+        .distinct()
+} catch (_: Exception) { emptyList() }
+
+fun netStatus(context: android.content.Context): Pair<String, ImageVector> = try {
+    val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+    val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+    when {
+        caps == null -> "Offline" to Icons.Default.PortableWifiOff
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi" to Icons.Default.Wifi
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "Seluler" to Icons.Default.SignalCellularAlt
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet" to Icons.Default.SettingsEthernet
+        else -> "Online" to Icons.Default.CloudDone
+    }
+} catch (_: Exception) { "?" to Icons.Default.HelpOutline }
 
 // ===== v1.8.2 — snapshot sesi: memungkinkan parse & rakit JSON dilakukan DI LUAR main thread
 // (v1.8.1 ke bawah melakukan parse/serialize di UI thread -> ANR "aplikasi tidak merespons"
@@ -502,7 +524,7 @@ void OnTick()
   }
 """
 fun seedRocAgentsFs(): Map<String, List<SimFile>> = mapOf(
-    "D:\\Work\\rocagents" to listOf(
+    "D:\\Work\\RocAgent" to listOf(
         SimFile("bin", true), SimFile("dashboard", true), SimFile("oci", true),
         SimFile("server", true), SimFile("sessions", true), SimFile("src", true),
         SimFile(".env.example", false, "1 KB"), SimFile(".gitignore", false, "1 KB"),
@@ -518,22 +540,22 @@ fun seedRocAgentsFs(): Map<String, List<SimFile>> = mapOf(
         SimFile("termux-login-codespace.sh", false, "1 KB"), SimFile("termux-open-codespace-localhost.sh", false, "1 KB"),
         SimFile("tsconfig.json", false, "1 KB"), SimFile("vite.config.ts", false, "1 KB")
     ),
-    "D:\\Work\\rocagents\\bin" to listOf(SimFile("codex", false, "44 KB")),
-    "D:\\Work\\rocagents\\dashboard" to listOf(SimFile("firebase.json", false, "1 KB"), SimFile("index.html", false, "2 KB")),
-    "D:\\Work\\rocagents\\oci" to listOf(
+    "D:\\Work\\RocAgent\\bin" to listOf(SimFile("codex", false, "44 KB")),
+    "D:\\Work\\RocAgent\\dashboard" to listOf(SimFile("firebase.json", false, "1 KB"), SimFile("index.html", false, "2 KB")),
+    "D:\\Work\\RocAgent\\oci" to listOf(
         SimFile("install_oci_cli.sh", false, "3 KB"), SimFile("private-model-install.sh", false, "2 KB"),
         SimFile("setup-cf-tunnel.sh", false, "3 KB"), SimFile("setup-oci-rdp.sh", false, "4 KB")
     ),
-    "D:\\Work\\rocagents\\server" to listOf(
+    "D:\\Work\\RocAgent\\server" to listOf(
         SimFile("db.ts", false, "5 KB"), SimFile("orchestrator.ts", false, "11 KB"),
         SimFile("scheduler.ts", false, "6 KB"), SimFile("tools.ts", false, "9 KB")
     ),
-    "D:\\Work\\rocagents\\sessions" to emptyList(),
-    "D:\\Work\\rocagents\\src" to listOf(
+    "D:\\Work\\RocAgent\\sessions" to emptyList(),
+    "D:\\Work\\RocAgent\\src" to listOf(
         SimFile("components", true), SimFile("App.tsx", false, "7 KB"), SimFile("index.css", false, "2 KB"),
         SimFile("main.tsx", false, "1 KB"), SimFile("types.ts", false, "2 KB")
     ),
-    "D:\\Work\\rocagents\\src\\components" to listOf(
+    "D:\\Work\\RocAgent\\src\\components" to listOf(
         SimFile("AppsSyncedManager.tsx", false, "4 KB"), SimFile("ChatInput.tsx", false, "3 KB"),
         SimFile("ChatMessage.tsx", false, "4 KB"), SimFile("ExecutionHistoryModal.tsx", false, "3 KB"),
         SimFile("FileArchive.tsx", false, "5 KB"), SimFile("LiveTerminal.tsx", false, "6 KB"),
@@ -548,7 +570,7 @@ Hermes Agent CLI + Local DevAgent Orchestrator Web UI
 stack: Express + Vite + React 19 + Gemini API.
 
 Quick start:
-  git clone https://github.com/ivansslo/rocagents.git
+  git clone https://github.com/ivansslo/RocAgent.git
   npm install
   npm run webui
 
@@ -633,10 +655,22 @@ private fun WineDesktopSimInner(
     var isMaximized by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
     var lowRamMode by remember { mutableStateOf(prefs.getBoolean("low_ram", false)) }
+    // ===== v1.9.0 — ukuran jendela kustom (drag-resize ala Windows; 0f = default per orientasi) =====
+    var winWFrac by remember { mutableStateOf(0f) }
+    var winHFrac by remember { mutableStateOf(0f) }
     val openWin: (DesktopWindow) -> Unit = { w ->
         openWindow = w
         isMaximized = false
         isFullscreen = false
+        winWFrac = 0f
+        winHFrac = 0f
+    }
+
+    // ===== v1.9.0 — AI untuk SEMUA aplikasi: kirim pertanyaan dari app mana pun ke ROC AI =====
+    var pendingAiQ by remember { mutableStateOf<String?>(null) }
+    fun askAi(from: String, q: String) {
+        pendingAiQ = "[$from] $q"
+        openWin(DesktopWindow.AI_CHAT)
     }
 
     // Windows 11 panels (widgets / quick settings / notifikasi / power) + jam hidup
@@ -699,7 +733,7 @@ private fun WineDesktopSimInner(
                         SimFile("Downloads", true)
                     ),
                     "D:\\Work" to listOf(
-                        SimFile("rocagents", true),
+                        SimFile("RocAgent", true),
                         SimFile("script.py", false, "2 KB"),
                         SimFile("backup.rar", false, "15 MB"),
                         SimFile("notes.txt", false, "1 KB")
@@ -737,9 +771,9 @@ private fun WineDesktopSimInner(
             )
         }
     }
-    // Tanam repo ivansslo/rocagents + ivansslo/rocd (struktur asli GitHub HEAD)
+    // Tanam repo ivansslo/RocAgent + ivansslo/rocd (struktur asli GitHub HEAD)
     LaunchedEffect(Unit) {
-        if (!simulatedFiles.containsKey("D:\\Work\\rocagents")) {
+        if (!simulatedFiles.containsKey("D:\\Work\\RocAgent")) {
             seedRocAgentsFs().forEach { (k, v) -> simulatedFiles[k] = v }
         }
         if (!simulatedFiles.containsKey("D:\\Work\\rocd")) {
@@ -756,7 +790,7 @@ private fun WineDesktopSimInner(
     val fileContents = remember {
         mutableStateMapOf(
             "C:\\MQL5\\Experts\\Expert.mq5" to DEFAULT_EXPERT_MQ5,
-            "D:\\Work\\rocagents\\README.md" to ROCAGENTS_README,
+            "D:\\Work\\RocAgent\\README.md" to ROCAGENTS_README,
             "D:\\Work\\script.py" to "# Rofwin script\nprint('halo dari python')\nprint(72/5+3*(9-4))\nprint(2**10)\n"
         )
     }
@@ -958,12 +992,13 @@ private fun WineDesktopSimInner(
     }
 
     // Command Prompt Logs
+    // ===== v1.9.0 — banner ala cmd.exe Windows PC asli =====
     val commandLogs = remember {
         mutableStateListOf(
-            "Rofwin Wine Environment [Version 1.0.0]",
-            "(C) Copyright ivansslo / Rofwin. All rights reserved.",
+            "Microsoft Windows [Version 10.0.26200.4046]",
+            "(c) Microsoft Corporation. All rights reserved. (sim Rofwin © 2026 ivansslo)",
             "",
-            "Type 'help' to list available commands.",
+            "Type 'help' to list available commands. Coba: dir, ipconfig, powershell, ai <tanya>",
             ""
         )
     }
@@ -1019,7 +1054,7 @@ private fun WineDesktopSimInner(
                     )
                 )
                 Text(
-                    text = "Recovery & Security Edition 1.8.3 — Build 26200.rofwin.rescue",
+                    text = "Pro AI Edition 1.9.0 — Build 26200.rofwin.ai",
                     style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
@@ -1100,9 +1135,9 @@ private fun WineDesktopSimInner(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(100.dp)
+                    .width(72.dp)
                     .verticalScroll(rememberScrollState())
-                    .padding(12.dp),
+                    .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 DesktopIconButton(
@@ -1302,16 +1337,40 @@ private fun WineDesktopSimInner(
                         .padding(bottom = 48.dp)
                         .zIndex(2f)
                         .background(Color(0xFF202020))
+                        .imePadding()
                     else -> Modifier
                         .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
-                        .fillMaxWidth(if (wideScreen) 0.72f else 0.96f)
-                        .fillMaxHeight(if (wideScreen) 0.86f else 0.72f)
+                        .fillMaxWidth(if (winWFrac > 0f) winWFrac else (if (wideScreen) 0.72f else 0.96f))
+                        .fillMaxHeight(if (winHFrac > 0f) winHFrac else (if (wideScreen) 0.86f else 0.72f))
                         .shadow(24.dp, winShape, ambientColor = Color.Black, spotColor = Color.Black)
                         .clip(winShape)
                         .background(Color(0xFF202020))
                         .border(0.5.dp, Win11Stroke, winShape)
+                        .imePadding()
                 }
                 Box(modifier = windowModifier) {
+                    // ===== v1.9.0 — handle RESIZE ala Windows (sudut kanan-bawah, drag bebas) =====
+                    if (!isMaximized && !isFullscreen) {
+                        val dens = LocalDensity.current.density
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .zIndex(6f)
+                                .size(24.dp)
+                                .pointerInput(Unit) {
+                                    detectDragGestures { change, d ->
+                                        change.consume()
+                                        val pw = cfg.screenWidthDp * dens
+                                        val ph = cfg.screenHeightDp * dens
+                                        val cw = if (winWFrac > 0f) winWFrac else (if (wideScreen) 0.72f else 0.96f)
+                                        val ch = if (winHFrac > 0f) winHFrac else (if (wideScreen) 0.86f else 0.72f)
+                                        winWFrac = (cw + d.x / pw).coerceIn(0.30f, 0.99f)
+                                        winHFrac = (ch + d.y / ph).coerceIn(0.25f, 0.99f)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) { Text("◢", color = Color(0xFF9E9E9E), fontSize = 10.sp) }
+                    }
                     Column {
                         // Title bar (Windows 11 — gelap, caption buttons putih)
                         Row(
@@ -1795,7 +1854,8 @@ private fun WineDesktopSimInner(
                                         terminalInput = terminalInput,
                                         onInputChange = { terminalInput = it },
                                         onLaunch = { w -> openWin(w) },
-                                        simulatedFiles = simulatedFiles
+                                        simulatedFiles = simulatedFiles,
+                                        onAskAi = { q -> askAi("Terminal", q) }
                                     )
                                 }
                                 DesktopWindow.WINRAR -> {
@@ -1823,7 +1883,9 @@ private fun WineDesktopSimInner(
                                         onTicket = { mt5Ticket = it },
                                         expertAdvisors = expertAdvisors,
                                         account = mt5Account,
-                                        onAccount = { mt5Account = it }
+                                        onAccount = { mt5Account = it },
+                                        onLaunch = { w -> openWin(w) },
+                                        onAskAi = { q -> askAi("MT5", q) }
                                     )
                                 }
                                 DesktopWindow.AI_CHAT -> {
@@ -1837,7 +1899,9 @@ private fun WineDesktopSimInner(
                                         pluginsOn = aiPluginsOn,
                                         bubbleOn = aiBubbleOn,
                                         onBubbleChange = { aiBubbleOn = it },
-                                        onLaunch = { w -> openWin(w) }
+                                        onLaunch = { w -> openWin(w) },
+                                        externalQuestion = pendingAiQ,
+                                        onExternalHandled = { pendingAiQ = null }
                                     )
                                 }
                                 DesktopWindow.MQL5_EDITOR -> {
@@ -1847,7 +1911,8 @@ private fun WineDesktopSimInner(
                                         simulatedFiles = simulatedFiles,
                                         expertAdvisors = expertAdvisors,
                                         eaActive = mt5ActiveEAs.size,
-                                        initialPath = "C:\\MQL5\\Experts\\Expert.mq5"
+                                        initialPath = "C:\\MQL5\\Experts\\Expert.mq5",
+                                        onAskAi = { q -> askAi("MetaEditor", q) }
                                     )
                                 }
                                 DesktopWindow.CODE_EDITOR -> {
@@ -1856,7 +1921,8 @@ private fun WineDesktopSimInner(
                                         simulatedFiles = simulatedFiles,
                                         expertAdvisors = expertAdvisors,
                                         eaActive = mt5ActiveEAs.size,
-                                        initialPath = null
+                                        initialPath = null,
+                                        onAskAi = { q -> askAi("Rofwin Code", q) }
                                     )
                                 }
                                 DesktopWindow.WINECFG -> {
@@ -1866,7 +1932,7 @@ private fun WineDesktopSimInner(
                                     WinetricksWindow()
                                 }
                                 DesktopWindow.BROWSER -> {
-                                    BrowserWindow()
+                                    BrowserWindow(onAskAi = { q -> askAi("Browser", q) })
                                 }
                                 DesktopWindow.GIT_BASH -> {
                                     GitBashWindow(simulatedFiles)
@@ -2066,6 +2132,10 @@ private fun WineDesktopSimInner(
                             .padding(horizontal = 5.dp, vertical = 4.dp)
                     ) {
                         Icon(Icons.Default.Wifi, contentDescription = "Wi-Fi", tint = Color(0xFFE8E8E8), modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        // v1.9.0 — ikon jaringan NYATA (Wi-Fi/Seluler/Offline dari ConnectivityManager)
+                        val (netLabel, netIcon) = remember(nowMs / 15000) { netStatus(context) }
+                        Icon(netIcon, contentDescription = netLabel, tint = if (netLabel == "Offline") Color(0xFFE57373) else Color(0xFFE8E8E8), modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(Icons.Default.VolumeUp, contentDescription = "Volume", tint = Color(0xFFE8E8E8), modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -2490,27 +2560,27 @@ fun DesktopIconButton(
 ) {
     Column(
         modifier = Modifier
-            .width(80.dp)
+            .width(62.dp)
             .clickable { onClick() }
-            .padding(4.dp),
+            .padding(3.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .background(Color(0x22FFFFFF), RoundedCornerShape(10.dp))
-                .border(0.5.dp, Win11Stroke, RoundedCornerShape(10.dp)),
+                .size(34.dp)
+                .background(Color(0x22FFFFFF), RoundedCornerShape(7.dp))
+                .border(0.5.dp, Win11Stroke, RoundedCornerShape(7.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = name, tint = Color(0xFFBEE3F8), modifier = Modifier.size(24.dp))
+            Icon(imageVector = icon, contentDescription = name, tint = Color(0xFFBEE3F8), modifier = Modifier.size(18.dp))
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = name,
             style = MaterialTheme.typography.labelSmall.copy(
                 color = Color.White,
                 textAlign = TextAlign.Center,
-                fontSize = 10.sp
+                fontSize = 9.sp
             ),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -2609,7 +2679,9 @@ fun TerminalWindow(
     terminalInput: String,
     onInputChange: (String) -> Unit,
     onLaunch: (DesktopWindow) -> Unit,
-    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>
+    simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
+    // v1.9.0 — AI ke semua aplikasi: perintah 'ai <pertanyaan>' di terminal
+    onAskAi: (String) -> Unit = {}
 ) {
     // Mode terminal: cmd.exe (hitam-hijau) atau powershell.exe (biru-putih)
     var psMode by remember { mutableStateOf(false) }
@@ -2648,6 +2720,12 @@ fun TerminalWindow(
                 commandLogs.add("(session cleared — type 'help' for commands)")
             }
 
+            // ---- v1.9.0 — AI dari terminal: 'ai <pertanyaan>' =====
+            cmd.startsWith("ai ") || cmd.startsWith("/ai ") -> {
+                commandLogs.add("🤖 Mengirim ke ROC AI: \"$arg\"")
+                onAskAi(arg)
+            }
+
             // ---- Help ----
             cmd == "help" || cmd == "?" || cmd == "/?" || cmd == "get-help" || cmd.startsWith("get-help ") -> {
                 commandLogs.add("ROFWIN COMMAND REFERENCE ${if (psMode) "(PowerShell)" else "(cmd.exe)"}:")
@@ -2666,7 +2744,7 @@ fun TerminalWindow(
             }
 
             // ---- System ----
-            cmd == "ver" -> commandLogs.add("Rofwin Windows [Version 10.0.19045.4046] (Wine 8.0.2 x86_64)")
+            cmd == "ver" -> commandLogs.add("Microsoft Windows [Version 10.0.26200.4046] (Rofwin Wine 8.0.2 x86_64)")
             cmd == "cls" || cmd == "clear" -> commandLogs.clear()
             cmd == "echo" -> commandLogs.add("ECHO is on.")
             cmd.startsWith("echo ") -> commandLogs.add(input.substringAfter(' '))
@@ -2783,11 +2861,21 @@ fun TerminalWindow(
             cmd == "ipconfig" || cmd == "ipconfig /all" -> {
                 commandLogs.add("Windows IP Configuration")
                 commandLogs.add("")
+                // v1.9.0 — IP NYATA dari device Android (jaringan terkoneksi bawaan)
+                val ips = deviceIps()
                 commandLogs.add("Ethernet adapter Wine0:")
                 commandLogs.add("   IPv4 Address. . . . . . . . . . . : 10.0.2.15")
                 commandLogs.add("   Subnet Mask . . . . . . . . . . . : 255.255.255.0")
                 commandLogs.add("   Default Gateway . . . . . . . . . : 10.0.2.2")
                 commandLogs.add("   DNS Servers . . . . . . . . . . . : 8.8.8.8")
+                if (ips.isNotEmpty()) {
+                    commandLogs.add("")
+                    commandLogs.add("Wi-Fi adapter AndroidDevice (upstream NYATA):")
+                    ips.forEach { ip -> commandLogs.add("   IPv4 Address. . . . . . . . . . . : $ip") }
+                } else {
+                    commandLogs.add("")
+                    commandLogs.add("Wi-Fi adapter AndroidDevice: Media disconnected")
+                }
             }
             cmd == "netstat" || cmd.startsWith("netstat ") -> {
                 commandLogs.add("Active Connections")
@@ -3162,6 +3250,35 @@ fun SshManagerWindow() {
         }
     }
 }
+// ===== v1.9.0 — komponen menu MT5: tipis, tetap terlihat, dan SEMUA item bisa diklik =====
+@Composable
+fun Mt5Menu(label: String, items: List<Pair<String, () -> Unit>>) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Text(
+            label,
+            color = Color(0xFFB0B0B0),
+            fontSize = 10.sp,
+            modifier = Modifier
+                .clickable { open = true }
+                .padding(horizontal = 5.dp, vertical = 2.dp)
+        )
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            modifier = Modifier.background(Color(0xFF2B2B2B))
+        ) {
+            items.forEach { (t, act) ->
+                if (t == "-") HorizontalDivider(color = Color(0xFF444444), thickness = 0.5.dp)
+                else DropdownMenuItem(
+                    text = { Text(t, fontSize = 11.sp, color = Color.White) },
+                    onClick = { open = false; act() }
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun Mt5Window(
     lowRam: Boolean,
@@ -3178,7 +3295,10 @@ fun Mt5Window(
     onTicket: (Long) -> Unit,
     expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
     account: String,
-    onAccount: (String) -> Unit
+    onAccount: (String) -> Unit,
+    // v1.9.0 — menu Tools→MetaEditor & Help→Tanya AI
+    onLaunch: (DesktopWindow) -> Unit = {},
+    onAskAi: (String) -> Unit = {}
 ) {
     val rnd = remember { java.util.Random() }
     var chartSymbol by remember { mutableStateOf("EURUSD") }
@@ -3227,6 +3347,7 @@ fun Mt5Window(
     // ===== v1.7.0 — Login akun MT5/MQL5 (sim lokal + WebTerminal RESMI nyata via browser) =====
     val context = LocalContext.current
     var loginOpen by remember { mutableStateOf(false) }
+    var aboutOpen by remember { mutableStateOf(false) }
     var loginId by remember { mutableStateOf("") }
     var loginPass by remember { mutableStateOf("") }
     var loginServer by remember { mutableStateOf("Rofwin-Demo") }
@@ -3234,13 +3355,67 @@ fun Mt5Window(
     val floating: Float = positions.sumOf { pnlOf(it) }.toFloat()
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2C))) {
-        // Menu bar
-        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            listOf("File", "View", "Insert", "Charts", "Tools", "Window", "Help").forEach {
-                Text(it, color = Color(0xFFBBBBBB), fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp))
-            }
+        // ===== v1.9.0 — Menu bar TIPIS tapi tetap terbaca & SEMUA bisa diklik =====
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(horizontal = 5.dp, vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Mt5Menu("File", listOf(
+                "New Order (F9)" to { showOrderDialog = true },
+                "Login Akun…" to { loginOpen = true },
+                "-",
+                "Reset Balance $10.000" to { onBalance(10000f); journalLogs.add(0, "balance direset ke 10000.00 [menu File]") },
+                "-",
+                "Tutup Chart" to { journalLogs.add(0, "hint: tutup window via tombol ✕ di caption") }
+            ) as List<Pair<String, () -> Unit>>)
+            Mt5Menu("View", listOf(
+                "Symbol Berikutnya" to {
+                    val ks = mids.keys.sorted()
+                    if (ks.isNotEmpty()) chartSymbol = ks[(ks.indexOf(chartSymbol) + 1).mod(ks.size)]
+                },
+                "Timeframe H1↔H4" to { timeframe = if (timeframe == "H1") "H4" else "H1" },
+                "Data Window (OHLC)" to {
+                    val c = candles.lastOrNull()
+                    if (c != null) journalLogs.add(0, "DATA $chartSymbol [$timeframe] O=${"%.2f".format(c.o)} H=${"%.2f".format(c.h)} L=${"%.2f".format(c.l)} C=${"%.2f".format(c.c)}")
+                    else journalLogs.add(0, "belum ada candle")
+                }
+            ) as List<Pair<String, () -> Unit>>)
+            Mt5Menu("Insert", listOf(
+                "Attach EA ke $chartSymbol…" to { attachFor = chartSymbol },
+                "Indikator MA on/off" to { maOn = !maOn },
+                "-",
+                "Order instan BUY 0.01" to { openPos(true, chartSymbol, 0.01, "insert-menu") },
+                "Order instan SELL 0.01" to { openPos(false, chartSymbol, 0.01, "insert-menu") }
+            ) as List<Pair<String, () -> Unit>>)
+            Mt5Menu("Charts", listOf(
+                "EURUSD" to { chartSymbol = "EURUSD" },
+                "XAUUSD" to { chartSymbol = "XAUUSD" },
+                "BTCUSD" to { chartSymbol = "BTCUSD" },
+                "-",
+                "Refresh Chart" to { pingMs = 20 + rnd.nextInt(30); journalLogs.add(0, "chart $chartSymbol [$timeframe] direfresh") }
+            ) as List<Pair<String, () -> Unit>>)
+            Mt5Menu("Tools", listOf(
+                "MetaEditor (Rofwin Code)" to { onLaunch(DesktopWindow.CODE_EDITOR) },
+                "History Center" to { toolboxTab = "History" },
+                "Options" to { journalLogs.add(0, "Options: server Rofwin-Demo · simulation build 1900 · leverage 1:500") }
+            ) as List<Pair<String, () -> Unit>>)
+            Mt5Menu("Window", listOf(
+                "Tile Window" to { journalLogs.add(0, "1 chart aktif: $chartSymbol $timeframe") },
+                "New Window $chartSymbol" to { journalLogs.add(0, "chart baru $chartSymbol (sim) — ganti symbol via menu View") }
+            ) as List<Pair<String, () -> Unit>>)
+            Mt5Menu("Help", listOf(
+                "💬 Tanya AI (Analisis)" to { onAskAi("Analisis market sim sekarang & saran posisi saya. Balance $balance USD, ${positions.size} posisi terbuka.") },
+                "Tentang MetaTrader 5…" to { aboutOpen = true }
+            ) as List<Pair<String, () -> Unit>>)
+        }
+        // ===== v1.9.0 — dialog Tentang (Help → Tentang) =====
+        if (aboutOpen) {
+            AlertDialog(
+                onDismissRequest = { aboutOpen = false },
+                containerColor = Color(0xFF1E1E1E),
+                confirmButton = { TextButton(onClick = { aboutOpen = false }) { Text("OK", color = Win11Accent) } },
+                title = { Text("MetaTrader 5 (Simulasi Rofwin)", color = Color.White) },
+                text = { Text("Terminal trading SIMULASI untuk belajar — bukan trading nyata.\n\nRofwin Pro AI Edition v1.9.0\n© 2026 ivansslo\n\nTick engine lokal 24 simbol, EA via Rofwin Code (compile F7), attach di Navigator, AI assistant terintegrasi.", color = Color(0xFFDDDDDD)) }
+            )
         }
         // Toolbar: timeframe + F9 + indikator + status
         Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF242424)).padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3623,19 +3798,28 @@ fun Mql5EditorWindow() {
     fun compile() {
         if (compiling) return
         compiling = true
-        outputLogs.add("Compiling 'Expert.mq5'...")
+        outputLogs.add("MetaEditor build — 'Expert.mq5' dimulai")
         scope.launch {
-            delay(900)
+            outputLogs.add("  [1/4] Parsing sumber...")
+            delay(280)
+            outputLogs.add("  [2/4] Analisis semantik MQL5 (OnInit/OnTick/OnDeinit)...")
+            delay(340)
             // Pemeriksaan sederhana: kurung kurawal tak seimbang => error ala compiler
             val openB = code.count { it == '{' }
             val closeB = code.count { it == '}' }
             if (openB != closeB) {
-                outputLogs.add("'{' - unbalanced parentheses   Expert.mq5   line ${code.lines().size}   (1 error, 0 warnings)")
-            } else {
-                val kb = (code.toByteArray().size / 3 + 1024)
-                outputLogs.add("0 errors, 0 warnings, $kb bytes code generated")
-                outputLogs.add("Expert.ex5 written to C:\\MQL5\\Experts\\")
+                outputLogs.add("'{' - unbalanced parentheses   Expert.mq5   line ${code.lines().size}")
+                outputLogs.add("  ✖ Build GAGAL: 1 error, 0 warnings")
+                compiling = false
+                return@launch
             }
+            outputLogs.add("  [3/4] Optimasi & generate bytecode .ex5...")
+            delay(360)
+            val kb = (code.toByteArray().size / 3 + 1024)
+            outputLogs.add("  [4/4] Menulis output file...")
+            delay(220)
+            outputLogs.add("  ✔ 0 errors, 0 warnings, $kb bytes code generated")
+            outputLogs.add("  ✔ Expert.ex5 → C:\\MQL5\\Experts\\ (siap di-Attach di MT5 Navigator)")
             compiling = false
         }
     }
@@ -3701,7 +3885,7 @@ fun Mql5EditorWindow() {
     }
 }
 @Composable
-fun BrowserWindow() {
+fun BrowserWindow(onAskAi: (String) -> Unit = {}) {
     var url by remember { mutableStateOf("https://www.google.com") }
     var urlInput by remember { mutableStateOf(url) }
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -3748,6 +3932,10 @@ fun BrowserWindow() {
             )
             IconButton(onClick = { webView?.reload() }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Muat ulang", tint = Color.White)
+            }
+            // v1.9.0 — AI di browser: ringkas/jelaskan halaman aktif
+            IconButton(onClick = { onAskAi("Ringkas & jelaskan isi halaman web ini: $url (judul URL: $url)") }) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = "Tanya AI tentang halaman", tint = Color(0xFF80D8FF))
             }
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White)) {
@@ -3874,7 +4062,9 @@ fun CodeEditorWindow(
     simulatedFiles: androidx.compose.runtime.snapshots.SnapshotStateMap<String, List<SimFile>>,
     expertAdvisors: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
     eaActive: Int = 0,
-    initialPath: String?
+    initialPath: String?,
+    // v1.9.0 — AI ke semua aplikasi: tombol ✨ AI mengirim kode aktif ke ROC AI
+    onAskAi: (String) -> Unit = {}
 ) {
     val openTabs = remember { mutableStateListOf<String>() }
     var activeTab by remember { mutableStateOf<String?>(null) }
@@ -4040,6 +4230,14 @@ fun CodeEditorWindow(
                 },
                 modifier = Modifier.size(26.dp)
             ) { Icon(Icons.Default.Build, "Compile", tint = Color(0xFFFFB74D), modifier = Modifier.size(15.dp)) }
+            // v1.9.0 — kirim kode aktif ke ROC AI (jelaskan/perbaiki)
+            IconButton(
+                onClick = {
+                    val codeNow = activeTab?.let { fileContents[it] } ?: ""
+                    onAskAi(if (codeNow.isBlank()) "Tolong bantu saya menulis kode baru di ${activeTab ?: "file"}" else "Jelaskan & cek kode berikut (beri saran perbaikan):\n" + codeNow.take(1500))
+                },
+                modifier = Modifier.size(26.dp)
+            ) { Icon(Icons.Default.AutoAwesome, "Tanya AI", tint = Color(0xFF80D8FF), modifier = Modifier.size(15.dp)) }
             Spacer(modifier = Modifier.weight(1f))
             Text(activeTab?.let { langOf(it) } ?: "", color = Color(0xFF999999), fontSize = 9.sp)
         }
@@ -4459,7 +4657,10 @@ fun RocAiWindow(
     pluginsOn: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
     bubbleOn: Boolean,
     onBubbleChange: (Boolean) -> Unit,
-    onLaunch: (DesktopWindow) -> Unit
+    onLaunch: (DesktopWindow) -> Unit,
+    // v1.9.0 — integrasi AI ke semua aplikasi: pertanyaan dari app lain masuk ke sini
+    externalQuestion: String? = null,
+    onExternalHandled: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val aiPrefs = remember { context.getSharedPreferences("RofwinAI", android.content.Context.MODE_PRIVATE) }
@@ -4515,12 +4716,12 @@ fun RocAiWindow(
             "ea" in prompt || "bot" in prompt || "expert" in prompt ->
                 "🤖 Status EA: ${expertAdvisors.size} terkompilasi" + (if (expertAdvisors.isNotEmpty()) " (${expertAdvisors.joinToString()})" else "") +
                         ".\nAlur: 1) Rofwin Code → ＋ New 'nama.mq5' 2) ⚙ Compile 3) MT5 → Navigator → Attach.\nKetik: buat ea <nama> <strategi> — saya tuliskan kodenya (online: AI sungguhan, offline: template MA-cross)."
-            "sync" in prompt || "rocagents" in prompt ->
-                "🔄 Tekan tombol 'Sync rocagents' di bawah — saya tarik struktur terbaru dari GitHub ivansslo/rocagents ke D:\\Work\\rocagents dan perbarui README. Selalu sinkron setiap repo Anda berubah."
+            "sync" in prompt || "RocAgent" in prompt ->
+                "🔄 Tekan tombol 'Sync RocAgent' di bawah — saya tarik struktur terbaru dari GitHub ivansslo/RocAgent ke D:\\Work\\RocAgent dan perbarui README. Selalu sinkron setiap repo Anda berubah."
             "compile" in prompt ->
                 "⚙ Compiler lokal memeriksa keseimbangan kurung + nama file .mq5. EA terdaftar: ${expertAdvisors.size}. Error umum: '{' - unbalanced parentheses → hitung { dan }."
             "help" in prompt || prompt.isBlank() ->
-                "Perintah saya:\n• 'analisis market'\n• 'buat ea <nama> <strategi>'\n• 'status ea'\n• 'sync rocagents'\n• bebas bertanya (online mode dengan key)"
+                "Perintah saya:\n• 'analisis market'\n• 'buat ea <nama> <strategi>'\n• 'status ea'\n• 'sync RocAgent'\n• bebas bertanya (online mode dengan key)"
             else -> "🤖 (offline) Terima: '$promptRaw'. Dengan API key di ⚙ Settings saya menjawab penuh via ${model}. Market kini: ${marketDigest()}"
         }
     }
@@ -4598,11 +4799,20 @@ fun RocAiWindow(
         }
     }
 
+    // ===== v1.9.0 — pertanyaan eksternal (dari Terminal/Code/Browser/MT5) diproses lewat pipeline yang sama =====
+    LaunchedEffect(externalQuestion) {
+        val q = externalQuestion
+        if (!q.isNullOrBlank()) {
+            onExternalHandled()
+            send(q)
+        }
+    }
+
     fun syncRocAgents() {
         busy = true
-        pushBot("🔄 Sync ivansslo/rocagents dari GitHub…")
+        pushBot("🔄 Sync ivansslo/RocAgent dari GitHub…")
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val (code, body) = httpGet("https://api.github.com/repos/ivansslo/rocagents/git/trees/HEAD?recursive=1")
+            val (code, body) = httpGet("https://api.github.com/repos/ivansslo/RocAgent/git/trees/HEAD?recursive=1")
             var added = 0
             if (code == 200) {
                 try {
@@ -4621,7 +4831,7 @@ fun RocAiWindow(
                         }
                     }
                     folders.forEach { (parent, list) ->
-                        val key = "D:\\Work\\rocagents" + (if (parent.isEmpty()) "" else "\\" + parent.replace('/', '\\'))
+                        val key = "D:\\Work\\RocAgent" + (if (parent.isEmpty()) "" else "\\" + parent.replace('/', '\\'))
                         val existing = simulatedFiles[key] ?: emptyList()
                         val newcomers = list.filter { nf -> existing.none { it.name == nf.name } }
                         if (existing.isEmpty() && !simulatedFiles.containsKey(key)) {
@@ -4633,13 +4843,13 @@ fun RocAiWindow(
                         }
                     }
                     // perbarui README juga
-                    val (rc, rb) = httpGet("https://raw.githubusercontent.com/ivansslo/rocagents/HEAD/README.md")
-                    if (rc == 200) fileContents["D:\\Work\\rocagents\\README.md"] = rb.take(4000)
+                    val (rc, rb) = httpGet("https://raw.githubusercontent.com/ivansslo/RocAgent/HEAD/README.md")
+                    if (rc == 200) fileContents["D:\\Work\\RocAgent\\README.md"] = rb.take(4000)
                 } catch (e: Exception) {
                     pushBot("⚠ parse tree gagal: ${e.message}")
                 }
             }
-            pushBot(if (code == 200) "✔ Sync selesai: +$added entri baru di D:\\Work\\rocagents + README terbaru (HEAD)." else "⚠ Sync gagal (http $code) — cek koneksi.")
+            pushBot(if (code == 200) "✔ Sync selesai: +$added entri baru di D:\\Work\\RocAgent + README terbaru (HEAD)." else "⚠ Sync gagal (http $code) — cek koneksi.")
             busy = false
         }
     }
@@ -4727,7 +4937,7 @@ fun RocAiWindow(
             val quickChips = buildList<Pair<String, () -> Unit>> {
                 add("📊 Analisis market" to { send("analisis market") })
                 if (pluginsOn["eagen"] != false) add("🤖 Buat EA…" to { send("buat ea EA_AI scalp MA7-21") })
-                if (pluginsOn["rocsync"] != false) add("🔄 Sync rocagents" to { syncRocAgents() })
+                if (pluginsOn["rocsync"] != false) add("🔄 Sync RocAgent" to { syncRocAgents() })
                 add("📈 Status posisi" to { pushBot("📈 " + marketDigest()) })
                 add("🧪 Cek compile" to { pushBot(offlineBrain("compile")) })
             }
@@ -4873,22 +5083,22 @@ fun GitBashWindow(simulatedFiles: androidx.compose.runtime.snapshots.SnapshotSta
                 currentOs = null
             }
 
-            // ---- git clone rocagents (menanam struktur nyata jika belum ada) ----
-            t.startsWith("git clone") && t.contains("rocagents") -> {
-                if (simulatedFiles.containsKey("D:\\Work\\rocagents")) {
-                    logs.add("rocagents already cloned — 'Already up to date.' (HEAD)")
+            // ---- git clone RocAgent (menanam struktur nyata jika belum ada) ----
+            t.startsWith("git clone") && t.contains("RocAgent") -> {
+                if (simulatedFiles.containsKey("D:\\Work\\RocAgent")) {
+                    logs.add("RocAgent already cloned — 'Already up to date.' (HEAD)")
                 } else {
-                    logs.add("Cloning into 'D:\\Work\\rocagents'…")
+                    logs.add("Cloning into 'D:\\Work\\RocAgent'…")
                     logs.add("remote: Enumerating objects: 57, done.")
                     seedRocAgentsFs().forEach { (k, v) -> simulatedFiles[k] = v }
                     val list = simulatedFiles["D:\\Work"]?.toMutableList() ?: mutableListOf()
-                    if (list.none { it.name == "rocagents" }) { list.add(SimFile("rocagents", true)); simulatedFiles["D:\\Work"] = list }
-                    logs.add("done. 57 objects — cek File Explorer / 'ls D:\\Work\\rocagents' di Terminal")
+                    if (list.none { it.name == "RocAgent" }) { list.add(SimFile("RocAgent", true)); simulatedFiles["D:\\Work"] = list }
+                    logs.add("done. 57 objects — cek File Explorer / 'ls D:\\Work\\RocAgent' di Terminal")
                 }
             }
 
             t == "help" -> {
-                logs.add("git: status log branch | clone https://github.com/ivansslo/rocagents")
+                logs.add("git: status log branch | clone https://github.com/ivansslo/RocAgent")
                 logs.add("rocd: list create start stop enter remove (multi-OS)")
                 logs.add("umum: ls pwd uname clear (mengikuti OS aktif)")
             }
@@ -4900,7 +5110,7 @@ fun GitBashWindow(simulatedFiles: androidx.compose.runtime.snapshots.SnapshotSta
             t == "git branch" -> logs.add("* main")
             t == "ls" -> {
                 if (currentOs != null) logs.add("bin  etc  home  root  usr  var")
-                else logs.add("app/  rocd/  rocagents/  README.md  build.gradle.kts")
+                else logs.add("app/  rocd/  RocAgent/  README.md  build.gradle.kts")
             }
             t == "pwd" -> logs.add(if (currentOs != null) "/root" else "/c/rofwin")
             t == "uname -a" -> {

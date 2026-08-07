@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.9.0 — Pro AI Edition (kecilkan ikon, AI di semua app, jendela resizable)
+- **Desktop**: semua ikon diperkecil (34dp, grid 72dp) ala DPI tinggi Windows 11
+- **Repo acuan AI** diganti `ivansslo/rocagents` → **`ivansslo/RocAgent`** (lebih relevan)
+- **AI terintegrasi ke SEMUA aplikasi**: perintah `ai <tanya>` di Terminal/PowerShell, tombol ✨ AI di Rofwin Code & MetaEditor (kirim kode aktif), tombol ✨ di Browser (ringkas halaman), Help→Tanya AI di MT5 — semua diproses pipeline ROC AI (online Groq/offline brain)
+- **Jendela bisa di-resize** seperti Windows asli: handle ◢ di sudut kanan-bawah, drag bebas (tersimpan per sesi buka)
+- **imePadding**: jendela (termasuk terminal) otomatis naik saat keyboard muncul — mengetik di shell tidak tertutup
+- **MT5 menu bar lebih tipis** tapi tetap terbaca — dan File/View/Insert/Charts/Tools/Window/Help SEMUANYA fungsional (New Order F9, login, ganti symbol/timeframe, Data Window OHLC, attach EA, order instan, MetaEditor, History, Tanya AI, Tentang)
+- **Terminal ala PC asli**: banner `Microsoft Windows [Version 10.0.26200.4046]`, `ver` meniru cmd, `ipconfig` menampilkan **IP NYATA device Android**, mode PowerShell biru (012456)
+- **Jaringan nyata di taskbar tray**: ikon Wi-Fi/Seluler/Offline dari ConnectivityManager (refresh tiap 15 dtk)
+- **MetaEditor compile divisualkan bertahap** ala aslinya: Parsing → Analisis semantik → Generate .ex5 → Tulis output, dengan log error kurung tak seimbang
+- **License/NOTICE**: modifikasi & fitur baru *Copyright (c) 2026 ivansslo* (lisensi upstream tetap dipertahankan)
+- Semua perbaikan v1.8.2/v1.8.3 dipertahankan
+- versionCode 190
+
+
 ## v1.8.3 — Hotfix FC setelah boot (Double-Scroll)
 - **FIX UTAMA (dari log crash user)**: `IllegalStateException: Vertically scrollable component was measured with an infinity maximum height constraints` — Desktop Icon Grid punya `.verticalScroll()` GANDA dalam satu rantai modifier; scrollable dalam diukur dengan max-height tak hingga → FC deterministik tepat setelah boot (Safe Mode pun tak menolong, karena grid ikon selalu dirender). Duplikat dihapus.
 - Semua perbaikan v1.8.2 dipertahankan (anti-ANR, SecureBox, SSH TOFU pinning, WebView guard, namespace com.rofwin, CI Java 21)
